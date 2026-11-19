@@ -79,6 +79,7 @@
     <div class="row"><input id="codeIn" inputmode="numeric" maxlength="4" placeholder="방 코드 4자리"><button class="btn blue" id="joinBtn" disabled>참가</button></div>
     <div style="height:9px"></div>
     <button class="btn green" id="soloBtn">혼자 연습 (컴퓨터 3대)</button>
+    <button class="btn gray" id="typeMenu">차량</button>
     <button class="btn gray" id="viewMenu">화면: 2D (눌러서 바꾸기)</button>
     <div id="status">멀티플레이 연결 확인 중...</div>
     <div class="help">조작: ◀ ▶ 핸들 · 가속은 자동 · <b>드리프트</b>를 누른 채 꺾다가 놓으면 부스터 (게이지 노랑=작은, 주황=큰 부스터) · <b>? 상자</b>를 먹으면 🚀부스터 아이템 · 앞 카트 바로 뒤에 붙으면 <b>슬립스트림</b> · 뒤처질수록 조금 더 빨라져요</div>
@@ -230,6 +231,7 @@ const NET = (() => {
     const o = {
       n: typeof p.n === 'string' ? p.n.slice(0, 12) : '?', jt: num(p.jt), host: p.host === true, sl: num(p.sl),
       x: num(p.x), y: num(p.y), a: num(p.a), sp: num(p.sp), dr: p.dr ? 1 : 0, bo: p.bo ? 1 : 0,
+      kt: p.kt === 'truck' ? 'truck' : 'dragon',
       rl: num(p.rl), s: num(p.s), fin: typeof p.fin === 'number' ? p.fin : -1, rid: typeof p.rid === 'string' ? p.rid.slice(0, 40) : null,
     };
     if (typeof p.hn === 'number') o.hn = p.hn;
@@ -724,7 +726,101 @@ const R3D = (() => {
     return { g, body, wheels, fronts, flames, flameMat, model: true, prevA: null, prevSp: 0, spin: 0, roll: 0, pitch: 0, steer: 0, lastL: null, lastR: null, smokeT: 0 };
   }
 
-  function makeKart(color) {
+
+  // ---------- 드래곤 카트 (오리지널 디자인) ----------
+  function shade(hex, f) { const c = new THREE.Color(hex); return f >= 0 ? c.lerp(new THREE.Color(0xffffff), f) : c.multiplyScalar(1 + f); }
+  function makeDragon(color) {
+    const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+    const main = new THREE.MeshLambertMaterial({ color: shade(color, -0.05) });
+    const darkM = new THREE.MeshLambertMaterial({ color: shade(color, -0.35) });
+    const belly = new THREE.MeshLambertMaterial({ color: shade(color, 0.55) });
+    const wingM = new THREE.MeshLambertMaterial({ color: shade(color, -0.2), side: THREE.DoubleSide });
+    const white = new THREE.MeshLambertMaterial({ color: 0xffffff }), black = new THREE.MeshBasicMaterial({ color: 0x111111 });
+    const horn = new THREE.MeshLambertMaterial({ color: 0x5a5560 }), mouth = new THREE.MeshLambertMaterial({ color: 0x5a1a1a });
+    const iris = new THREE.MeshLambertMaterial({ color: shade(color, -0.1) });
+    const chassis = new THREE.MeshLambertMaterial({ color: 0x1b1b1d }), metal = new THREE.MeshLambertMaterial({ color: 0x9aa0a8 });
+    const sph = new THREE.SphereGeometry(1, 16, 12);
+    const blob = (mat, x, y, z, sx, sy, sz, parent) => { const m = new THREE.Mesh(sph, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.castShadow = true; (parent || body).add(m); return m; };
+    const cone = (mat, r0, h, x, y, z, rx, rz, parent) => { const m = new THREE.Mesh(new THREE.ConeGeometry(r0, h, 7), mat); m.position.set(x, y, z); m.rotation.set(rx || 0, 0, rz || 0); m.castShadow = true; (parent || body).add(m); return m; };
+
+    // 섀시 + 바퀴
+    const ch = new THREE.Mesh(new THREE.BoxGeometry(32, 2, 18), chassis); ch.position.y = 4; g.add(ch);
+    const tireG = new THREE.CylinderGeometry(5, 5, 5.5, 16); tireG.rotateX(Math.PI / 2);
+    const rimG = new THREE.CylinderGeometry(2.6, 2.6, 5.8, 8); rimG.rotateX(Math.PI / 2);
+    const wheels = [], fronts = [];
+    for (const [x, z, front] of [[12, 11, 1], [12, -11, 1], [-12, 12, 0], [-12, -12, 0]]) {
+      const pivot = new THREE.Group(); pivot.position.set(x, 5, z); g.add(pivot);
+      const spin = new THREE.Group(); pivot.add(spin);
+      const t = new THREE.Mesh(tireG, chassis); t.castShadow = true; spin.add(t); spin.add(new THREE.Mesh(rimG, metal));
+      spin.add(new THREE.Mesh(new THREE.BoxGeometry(4.4, 1, 6), metal));
+      wheels.push(spin); if (front) fronts.push(pivot);
+    }
+    // 몸통, 배
+    blob(main, 0, 10, 0, 19, 8, 11);
+    blob(belly, 2, 7.5, 0, 16, 5.5, 9.5);
+    // 등 가시
+    for (let x = 13; x >= -15; x -= 4) cone(darkM, 1.7, 5.5, x, 10 + 8 * Math.sqrt(Math.max(0, 1 - (x / 20) ** 2)) + 1.5, 0, 0, 0.45);
+    // 목 + 머리
+    blob(main, 15, 13, 0, 7, 6, 7);
+    const head = new THREE.Group(); head.position.set(22, 15, 0); body.add(head);
+    blob(main, 0, 0, 0, 7.5, 6, 7, head);
+    blob(main, 6.5, -1, 0, 6.5, 3.6, 5, head);                 // 주둥이
+    blob(mouth, 6, -3.2, 0, 5.6, 1.6, 4, head);                  // 입 안
+    blob(belly, 5.5, -5, 0, 6, 1.8, 4.3, head);                  // 아래턱
+    for (let i = 0; i < 4; i++) for (const s of [1, -1]) {
+      cone(white, 0.7, 2, 4 + i * 2.1, -3.1, s * 2.9, Math.PI, 0, head);        // 윗니
+      if (i % 2) cone(white, 0.6, 1.6, 4.5 + i * 2, -4.3, s * 2.6, 0, 0, head); // 아랫니
+    }
+    for (const s of [1, -1]) {
+      blob(white, 3.6, 2.2, s * 3.6, 2.4, 2.4, 2, head);         // 눈
+      blob(iris, 5.2, 2.0, s * 4.2, 1.3, 1.5, 1, head);
+      blob(black, 5.9, 2.0, s * 4.5, 0.6, 0.9, 0.6, head);
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(6, 1.6, 2.6), darkM); brow.position.set(3.6, 4.6, s * 3.4); brow.rotation.set(0, 0, -0.35); head.add(brow);
+      const h = cone(horn, 1.5, 9, -2.5, 5.5, s * 3, s * 0.35, 1.1, head);         // 뿔
+      for (let k = 0; k < 3; k++) cone(darkM, 1.3, 4, -1.5 - k * 2.2, 6.5 - k * 0.4, 0, 0, 0.6, head); // 머리 볏
+    }
+    // 날개
+    const ws = new THREE.Shape();
+    ws.moveTo(0, 0); ws.lineTo(4, 14); ws.lineTo(12, 26); ws.lineTo(13, 16); ws.lineTo(19, 21); ws.lineTo(19, 10); ws.lineTo(26, 11); ws.lineTo(22, 1); ws.lineTo(0, 0);
+    const wg = new THREE.ShapeGeometry(ws);
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(wg), new THREE.LineBasicMaterial({ color: 0x2a1010 }));
+    const wings = [1, -1].map((s) => {
+      const pivot = new THREE.Group(); pivot.position.set(3, 16, s * 6); body.add(pivot);
+      const m = new THREE.Mesh(wg, wingM); m.rotation.x = s * Math.PI / 2; m.scale.x = -1; m.castShadow = true; pivot.add(m);
+      const e = edges.clone(); e.rotation.copy(m.rotation); e.scale.copy(m.scale); pivot.add(e);
+      for (const [bx, by] of [[12, 26], [19, 21], [26, 11]]) { // 날개 뼈
+        const d = new THREE.Vector3(-bx, 0.3, s * by), len = d.length();
+        const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.7, len, 5), darkM);
+        bone.position.copy(d).multiplyScalar(0.5);
+        bone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize());
+        pivot.add(bone);
+      }
+      cone(horn, 1, 3.5, 0, 1.5, s * 0.5, 0, 0, pivot); // 날개 발톱
+      return { pivot, s };
+    });
+    // 꼬리 (관절 체인)
+    const tail = []; let parent = new THREE.Group(); parent.position.set(-17, 10, 0); body.add(parent);
+    for (let i = 0; i < 5; i++) {
+      const seg = new THREE.Group(); seg.position.set(i === 0 ? 0 : -3.6, i === 0 ? 0 : 1.6, 0); seg.rotation.z = i ? 0.12 : 0; parent.add(seg);
+      const r0 = 4.6 * (1 - i / 6.5);
+      blob(main, -2.5, 0, 0, r0 * 1.2, r0, r0, seg);
+      if (i % 2 === 0) cone(darkM, 1.2, 3.5, -2.5, r0 + 1, 0, 0, 0.5, seg);
+      tail.push(seg); parent = seg;
+    }
+    const tip = cone(darkM, 2.2, 5, -4.5, 0.5, 0, 0, Math.PI / 2, parent);
+    // 입에서 나오는 불 (부스터)
+    const fireO = new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.85 });
+    const fireY = new THREE.MeshBasicMaterial({ color: 0xffe14a, transparent: true, opacity: 0.95 });
+    const fg = new THREE.ConeGeometry(4.5, 26, 10); fg.rotateZ(Math.PI / 2); fg.translate(13, 0, 0);
+    const fg2 = new THREE.ConeGeometry(2.4, 18, 8); fg2.rotateZ(Math.PI / 2); fg2.translate(9, 0, 0);
+    const fire = new THREE.Group(); fire.position.set(12, -3, 0); head.add(fire);
+    fire.add(new THREE.Mesh(fg, fireO)); fire.add(new THREE.Mesh(fg2, fireY));
+    scene.add(g);
+    return { g, body, wheels, fronts, flames: [fire], flameMat: fireO, dragon: { wings, tail, head }, prevA: null, prevSp: 0, spin: 0, roll: 0, pitch: 0, steer: 0, lastL: null, lastR: null, smokeT: 0, flap: Math.random() * 6 };
+  }
+
+  function makeKart(color, type) {
+    if (type === 'dragon') return makeDragon(color);
     const fromModel = makeKartModel(color);
     if (fromModel) return fromModel;
     const g = new THREE.Group();
@@ -781,7 +877,8 @@ const R3D = (() => {
     for (const it of list) {
       seen.add(it.id);
       let v = karts.get(it.id);
-      if (!v || v.color !== it.color) { if (v) scene.remove(v.g); v = makeKart(it.color); v.color = it.color; karts.set(it.id, v); }
+      const key = it.color + '|' + (it.type || 'truck');
+      if (!v || v.key !== key) { if (v) scene.remove(v.g); v = makeKart(it.color, it.type); v.key = key; v.color = it.color; karts.set(it.id, v); }
       const k = it.k, sp = k.speed || 0;
       v.g.position.set(k.x, 0, k.y);
       v.g.rotation.y = -k.a;
@@ -806,7 +903,15 @@ const R3D = (() => {
       }
       const boosting = (k.boost || 0) > 0;
       for (const f of v.flames) { f.visible = boosting; f.scale.set(0.7 + Math.random() * 0.7, 1, 1); }
-      v.flameMat.color.setHex(Math.random() < 0.5 ? 0x66d0ff : 0xa8ecff);
+      if (v.dragon) {
+        v.flameMat.color.setHex(Math.random() < 0.5 ? 0xff7a1a : 0xff4a1a);
+        for (const f of v.flames) f.scale.set(0.8 + Math.random() * 0.5, 0.8 + Math.random() * 0.4, 0.8 + Math.random() * 0.4);
+        v.flap += dt * (5 + Math.min(1, Math.abs(sp) / 400) * 7 + (boosting ? 6 : 0));
+        const fl = Math.sin(v.flap) * (0.35 + (boosting ? 0.2 : 0)) + (k.drifting ? 0.25 : 0);
+        for (const w of v.dragon.wings) w.pivot.rotation.x = -w.s * (0.55 + fl);
+        v.dragon.tail.forEach((seg, i) => { seg.rotation.y = Math.sin(time * 5 - i * 0.7) * 0.12 + v.steer * 0.08; });
+        v.dragon.head.rotation.y = v.steer * 0.15; v.dragon.head.rotation.z = boosting ? 0.12 : 0;
+      } else v.flameMat.color.setHex(Math.random() < 0.5 ? 0x66d0ff : 0xa8ecff);
 
       // 연기, 흙먼지, 스키드 마크
       const rl = local(k, -12, 12), rr = local(k, -12, -12);
@@ -869,6 +974,7 @@ const R3D = (() => {
     }
     const fx0 = focus ? focus.x : 500, fz0 = focus ? focus.y : 650;
     sun.position.set(fx0 + 300, 700, fz0 + 200); sun.target.position.set(fx0, 0, fz0);
+    if (window.__cam && focus) { const c = window.__cam; camera.position.set(focus.x + c[0], c[1], focus.y + c[2]); camera.lookAt(focus.x, 12, focus.y); camera.fov = 50; camera.updateProjectionMatrix(); }
     sky.position.copy(camera.position);
     boxes.forEach((m, i) => { m.visible = boxActive[i]; m.rotation.y = time * 1.5 + i; m.rotation.x = time * 0.7; m.position.y = 14 + Math.sin(time * 3 + i) * 2; });
     renderer.render(scene, camera);
@@ -914,7 +1020,8 @@ let roomNs = null, R = null, isHost = false, roomCode = '', joinTime = 0, mySlot
 let hostOffset = 0, offsetMax = -Infinity, hostPeerId = null, lastHostPres = null;
 const remotes = new Map();
 let camA = 0, camX = 0, camY = 0, menuT = 0;
-let view = '2d';
+let view = '2d', kartType = 'dragon';
+try { kartType = localStorage.getItem('kart-type') === 'truck' ? 'truck' : 'dragon'; } catch (e) {}
 try { view = localStorage.getItem('kart-view') === '3d' ? '3d' : '2d'; } catch (e) {}
 let lastSend = 0, showResults = false, resultsKey = '', flash = '', flashUntil = 0, clockT = 0;
 const input = { left: false, right: false, drift: false, brake: false, gas: true };
@@ -983,7 +1090,7 @@ function showPanel(which) {
 function startSolo() {
   getNick(); mode = 'solo';
   me = C.newKart(T, 0);
-  bots = [1, 2, 3].map((s, i) => { const k = C.newKart(T, s); k.baseMul = [0.97, 0.94, 0.91][i]; k.lane = [22, -18, 8][i]; k.name = ['토끼봇', '거북봇', '여우봇'][i]; k.color = COLORS[s]; return k; });
+  bots = [1, 2, 3].map((s, i) => { const k = C.newKart(T, s); k.baseMul = [0.97, 0.94, 0.91][i]; k.lane = [22, -18, 8][i]; k.name = ['토끼봇', '거북봇', '여우봇'][i]; k.kt = i === 1 ? 'truck' : 'dragon'; k.color = COLORS[s]; return k; });
   newSoloRace();
   enterGameUI();
 }
@@ -1059,7 +1166,7 @@ function sendPresence(force) {
   const t = Date.now();
   if (!force && t - lastSend < SEND_MS) return;
   lastSend = t;
-  const p = { n: nick, jt: joinTime, host: isHost, sl: mySlot,
+  const p = { n: nick, jt: joinTime, host: isHost, sl: mySlot, kt: kartType,
     x: Math.round(me.x), y: Math.round(me.y), a: Math.round(me.a * 100) / 100, sp: Math.round(me.speed),
     dr: me.drifting ? 1 : 0, bo: me.boost > 0 ? 1 : 0,
     rl: me.rl, s: Math.round(me.s), fin: me.fin >= 0 ? Math.round(me.fin) : -1, rid: myRaceId };
@@ -1105,7 +1212,7 @@ function updateRoom() {
     let r = remotes.get(p.peer);
     if (!r) { r = { x: q.x, y: q.y, a: q.a, pres: null }; remotes.set(p.peer, r); }
     if (r.pres !== q) { r.pres = q; r.recv = Date.now(); }
-    r.color = COLORS[Math.min(idx, 3)]; r.name = clean(q.n) || '?';
+    r.color = COLORS[Math.min(idx, 3)]; r.name = clean(q.n) || '?'; r.kt = q.kt === 'truck' ? 'truck' : 'dragon';
   });
   for (const k of remotes.keys()) if (!seen.has(k)) remotes.delete(k);
   $('roomtag').textContent = '방 ' + roomCode + ' · ' + Math.min(list.length, 4) + '/4명 · 🔗초대';
@@ -1228,10 +1335,28 @@ function setView(v) {
 }
 $('viewBtn2').onclick = () => setView(view === '3d' ? '2d' : '3d');
 $('viewMenu').onclick = () => setView(view === '3d' ? '2d' : '3d');
+const typeLabel = () => { $('typeMenu').textContent = '차량: ' + (kartType === 'dragon' ? '🐉 드래곤 카트' : '🛻 레이싱 트럭') + ' (눌러서 바꾸기)'; };
+$('typeMenu').onclick = () => { kartType = kartType === 'dragon' ? 'truck' : 'dragon'; try { localStorage.setItem('kart-type', kartType); } catch (e) {} typeLabel(); };
+typeLabel();
 setView(view);
 
-function drawKart(k, color, name) {
+function drawKart(k, color, name, type) {
   octx.save(); octx.translate(k.x, k.y); octx.rotate(k.a);
+  if (type === 'dragon') {
+    const flap = Math.sin(clockT * 10 + k.x * 0.01) * 4;
+    octx.fillStyle = 'rgba(0,0,0,.25)'; octx.beginPath(); octx.ellipse(1, 2, 20, 12, 0, 0, 7); octx.fill();
+    octx.fillStyle = color; octx.strokeStyle = '#2a1010'; octx.lineWidth = 1.2;
+    for (const s of [1, -1]) { octx.beginPath(); octx.moveTo(4, s * 6); octx.lineTo(-8, s * (24 + flap)); octx.lineTo(-6, s * 15); octx.lineTo(-14, s * (19 + flap)); octx.lineTo(-12, s * 9); octx.closePath(); octx.globalAlpha = 0.85; octx.fill(); octx.globalAlpha = 1; octx.stroke(); }
+    octx.beginPath(); octx.moveTo(-14, 0); octx.quadraticCurveTo(-26, Math.sin(clockT * 6) * 6, -34, 0); octx.lineWidth = 4; octx.strokeStyle = color; octx.stroke();
+    octx.lineWidth = 1.2; octx.strokeStyle = '#2a1010';
+    octx.beginPath(); octx.ellipse(0, 0, 16, 8, 0, 0, 7); octx.fill(); octx.stroke();
+    octx.beginPath(); octx.ellipse(16, 0, 7, 6, 0, 0, 7); octx.fill(); octx.stroke();
+    octx.fillStyle = '#fff'; for (const s of [1, -1]) { octx.beginPath(); octx.arc(18, s * 3.4, 2, 0, 7); octx.fill(); }
+    octx.fillStyle = '#5a5560'; for (const s of [1, -1]) { octx.beginPath(); octx.moveTo(12, s * 3); octx.lineTo(6, s * 8); octx.lineTo(13, s * 5); octx.fill(); }
+    if (k.boost > 0) { octx.fillStyle = 'rgba(255,140,30,.9)'; octx.beginPath(); octx.moveTo(22, -4); octx.lineTo(36 + Math.random() * 10, 0); octx.lineTo(22, 4); octx.fill(); }
+    if (k.drifting) { octx.fillStyle = (k.charge || 0) >= C.P.BIG ? '#ff7a1a' : (k.charge || 0) >= C.P.SMALL ? '#ffd23f' : '#ddd'; for (const y of [-9, 9]) { octx.beginPath(); octx.arc(-14 - Math.random() * 6, y, 3 + Math.random() * 2, 0, 7); octx.fill(); } }
+    octx.restore(); return;
+  }
   if (k.boost > 0) { octx.fillStyle = 'rgba(80,180,255,.8)'; octx.beginPath(); octx.moveTo(-17, -6); octx.lineTo(-34 - Math.random() * 10, 0); octx.lineTo(-17, 6); octx.fill(); }
   if (k.drifting) { octx.fillStyle = (k.charge || 0) >= C.P.BIG ? '#ff7a1a' : (k.charge || 0) >= C.P.SMALL ? '#ffd23f' : '#ddd';
     for (const y of [-11, 11]) { octx.beginPath(); octx.arc(-15 - Math.random() * 6, y, 3 + Math.random() * 2, 0, 7); octx.fill(); } }
@@ -1287,9 +1412,9 @@ function draw2D(dt) {
     octx.restore();
   });
   const labels = [];
-  for (const b of bots) { drawKart(b, b.color, b.name); labels.push([b, b.name, b.color]); }
-  for (const r of remotes.values()) { drawKart(r, r.color, r.name); labels.push([r, r.name, r.color]); }
-  if (me) drawKart(me, mode === 'room' ? COLORS[Math.max(0, mySlot)] : COLORS[0], nick);
+  for (const b of bots) { drawKart(b, b.color, b.name, b.kt); labels.push([b, b.name, b.color]); }
+  for (const r of remotes.values()) { drawKart(r, r.color, r.name, r.kt); labels.push([r, r.name, r.color]); }
+  if (me) drawKart(me, mode === 'room' ? COLORS[Math.max(0, mySlot)] : COLORS[0], nick, kartType);
 
   // name tags in screen space
   const m = octx.getTransform();
@@ -1307,9 +1432,9 @@ function draw(dt) {
   clockT += dt;
   if (view === '2d') { draw2D(dt); return; }
   const list = [];
-  for (const b of bots) list.push({ id: 'bot-' + b.name, k: b, color: b.color, name: b.name });
-  for (const [id, r] of remotes) list.push({ id: 'r-' + id, k: r, color: r.color, name: r.name });
-  if (me) { me.steer = (input.right ? 1 : 0) - (input.left ? 1 : 0); list.push({ id: 'me', k: me, color: mode === 'room' ? COLORS[Math.max(0, mySlot)] : COLORS[0], name: nick, me: true }); }
+  for (const b of bots) list.push({ id: 'bot-' + b.name, k: b, color: b.color, name: b.name, type: b.kt });
+  for (const [id, r] of remotes) list.push({ id: 'r-' + id, k: r, color: r.color, name: r.name, type: r.kt });
+  if (me) { me.steer = (input.right ? 1 : 0) - (input.left ? 1 : 0); list.push({ id: 'me', k: me, color: mode === 'room' ? COLORS[Math.max(0, mySlot)] : COLORS[0], name: nick, me: true, type: kartType }); }
   R3D.syncKarts(list, clockT, dt);
   R3D.render(dt, me, boxActive, clockT, { lights: lightsState(), finished: !!(me && me.fin >= 0 && race && (inRace() || mode === 'solo')) });
   // 이름표
