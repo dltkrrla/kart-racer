@@ -11,4 +11,4 @@
 - 연결: PeerJS(WebRTC) P2P, 방장 폰이 호스트
 
 ## 3D 모델 출처
-- 차량·텐트 모델: [Kenney Starter Kit Racing](https://github.com/KenneyNL/Starter-Kit-Racing) (CC0) — www.kenney.nl
+- 3D 모델 (모두 CC0, www.kenney.nl): [Starter Kit Racing](https://github.com/KenneyNL/Starter-Kit-Racing) 차량·텐트, [Starter Kit 3D Platformer](https://github.com/KenneyNL/Starter-Kit-3D-Platformer) 로봇 드라이버·구름·깃발, [Starter Kit City Builder](https://github.com/KenneyNL/Starter-Kit-City-Builder) 건물·숲, [Starter Kit Basic Scene](https://github.com/KenneyNL/Starter-Kit-Basic-Scene) 나무

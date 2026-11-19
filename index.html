@@ -80,6 +80,7 @@
     <div style="height:9px"></div>
     <button class="btn green" id="soloBtn">혼자 연습 (컴퓨터 3대)</button>
     <button class="btn gray" id="typeMenu">차량</button>
+    <button class="btn gray" id="gfxMenu">그래픽</button>
     <button class="btn gray" id="viewMenu">화면: 2D (눌러서 바꾸기)</button>
     <div id="status">멀티플레이 연결 확인 중...</div>
     <div class="help">조작: ◀ ▶ 핸들 · 가속은 자동 · <b>드리프트</b>를 누른 채 꺾다가 놓으면 부스터 (게이지 노랑=작은, 주황=큰 부스터) · <b>? 상자</b>를 먹으면 🚀부스터 아이템 · 앞 카트 바로 뒤에 붙으면 <b>슬립스트림</b> · 뒤처질수록 조금 더 빨라져요</div>
@@ -88,6 +89,7 @@
 </div>
 <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://unpkg.com/three@0.147.0/examples/js/environments/RoomEnvironment.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 const CORE = (() => {
@@ -231,7 +233,7 @@ const NET = (() => {
     const o = {
       n: typeof p.n === 'string' ? p.n.slice(0, 12) : '?', jt: num(p.jt), host: p.host === true, sl: num(p.sl),
       x: num(p.x), y: num(p.y), a: num(p.a), sp: num(p.sp), dr: p.dr ? 1 : 0, bo: p.bo ? 1 : 0,
-      kt: p.kt === 'truck' ? 'truck' : 'dragon',
+      kt: ['truck', 'kart', 'dragon'].includes(p.kt) ? p.kt : 'dragon',
       rl: num(p.rl), s: num(p.s), fin: typeof p.fin === 'number' ? p.fin : -1, rid: typeof p.rid === 'string' ? p.rid.slice(0, 40) : null,
     };
     if (typeof p.hn === 'number') o.hn = p.hn;
@@ -404,6 +406,8 @@ const SFX = (() => {
 // three.js 3D 화면 (레이싱 연출). 물리는 2D(x,y) 그대로, 화면만 3D(x,z)
 const R3D = (() => {
   const C = CORE;
+  let HQ = true, lib = {}, coneTrees = [], standCenters = [];
+  const lin = (v) => Math.pow(v, 2.2);
   let T, renderer, scene, camera, sun, sky, karts = new Map(), boxes = [], camA = 0, camPos = null, t0 = 0, shake = 0;
   let lights = [], lightMats = {}, finAngle = 0;
   const v3 = new THREE.Vector3();
@@ -416,6 +420,7 @@ const R3D = (() => {
     const t = new THREE.CanvasTexture(c);
     if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
     t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    t.encoding = THREE.sRGBEncoding;
     return t;
   }
   function speckle(g, w, h, n, alpha) {
@@ -433,7 +438,7 @@ const R3D = (() => {
       const u0 = T.cum[i] / (uvScale || 100), u1 = T.cum[i + 1] / (uvScale || 100);
       pos.push(a[0], y, a[1], b[0], y, b[1], d[0], y, d[1], a[0], y, a[1], d[0], y, d[1], cN[0], y, cN[1]);
       uv.push(u0, 0, u0, 1, u1, 1, u0, 0, u1, 1, u1, 0);
-      for (let k = 0; k < 6; k++) col.push(c[0], c[1], c[2]);
+      for (let k = 0; k < 6; k++) col.push(lin(c[0]), lin(c[1]), lin(c[2]));
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -450,7 +455,7 @@ const R3D = (() => {
       const u0 = T.cum[i] / (uvScale || 50), u1 = T.cum[i + 1] / (uvScale || 50);
       pos.push(a[0], y0, a[1], b[0], y0, b[1], b[0], y0 + height, b[1], a[0], y0, a[1], b[0], y0 + height, b[1], a[0], y0 + height, a[1]);
       uv.push(u0, 0, u1, 0, u1, 1, u0, 0, u1, 1, u0, 1);
-      for (let k = 0; k < 6; k++) col.push(c[0], c[1], c[2]);
+      for (let k = 0; k < 6; k++) col.push(lin(c[0]), lin(c[1]), lin(c[2]));
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -505,32 +510,36 @@ const R3D = (() => {
     skidIdx = (skidIdx + 1) % SKID_MAX; skidGeo.attributes.position.needsUpdate = true;
   }
 
-  function init(track, treeList, boxList) {
-    T = track;
+  function init(track, treeList, boxList, opts) {
+    T = track; HQ = !(opts && opts.low);
+    if (THREE.ColorManagement) THREE.ColorManagement.legacyMode = false;
     kappa = new Float32Array(T.N);
     for (let i = 0; i < T.N; i++) { let d = ang(i + 4) - ang(i - 4); d = C.wrapA(d); kappa[i] = d / (8 * 8); }
 
-    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
+    renderer = new THREE.WebGLRenderer({ antialias: HQ, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(HQ ? Math.min(devicePixelRatio || 1, 1.75) : 1);
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.08;
     renderer.setSize(innerWidth, innerHeight);
-    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = HQ; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.id = 'gl';
     document.body.insertBefore(renderer.domElement, document.body.firstChild);
     scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0xcfe6ff, 900, 3600);
+    scene.fog = new THREE.Fog(0xdcecff, 1000, 4200);
+    if (THREE.RoomEnvironment) { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new THREE.RoomEnvironment(), 0.04).texture; }
     camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 2, 7000);
 
     // 하늘 (그라데이션 돔)
     sky = new THREE.Mesh(new THREE.SphereGeometry(5000, 24, 12), new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
-      uniforms: { top: { value: new THREE.Color(0x2f7fd8) }, bot: { value: new THREE.Color(0xd8ecff) } },
+      uniforms: { top: { value: new THREE.Color(0x4f9fe8) }, bot: { value: new THREE.Color(0xe4f1ff) } },
       vertexShader: 'varying float h; void main(){ h = normalize(position).y; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-      fragmentShader: 'uniform vec3 top; uniform vec3 bot; varying float h; void main(){ float t = clamp(h*2.2,0.0,1.0); gl_FragColor = vec4(mix(bot, top, pow(t,0.7)),1.0); }',
+      fragmentShader: 'uniform vec3 top; uniform vec3 bot; varying float h; void main(){ float t = clamp(h*2.2,0.0,1.0); gl_FragColor = linearToOutputTexel(vec4(mix(bot, top, pow(t,0.7)),1.0)); }',
     }));
     scene.add(sky);
 
-    scene.add(new THREE.HemisphereLight(0xdfefff, 0x6a6a55, 0.75));
-    sun = new THREE.DirectionalLight(0xfff1d8, 0.95);
+    scene.add(new THREE.HemisphereLight(0xeaf4ff, 0x7a7560, 0.9));
+    sun = new THREE.DirectionalLight(0xfff0d6, 1.7);
     sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
     Object.assign(sun.shadow.camera, { left: -260, right: 260, top: 260, bottom: -260, near: 10, far: 1500 });
     sun.shadow.bias = -0.0015;
@@ -596,6 +605,7 @@ const R3D = (() => {
     }
 
     // 관중석 (출발 직선 바깥쪽)
+    standCenters = [];
     buildGrandstand(18, 70, -(Wl + 60));
     buildGrandstand(T.N - 70, 50, Wl + 60, true);
 
@@ -625,7 +635,7 @@ const R3D = (() => {
       col.setHSL(0.3 + (i % 7) * 0.012, 0.5, 0.26 + (i % 4) * 0.025); crowns.setColorAt(i, col);
       d.position.set(t.x, t.r * 0.4, t.y); d.scale.set(t.r, t.r, t.r); d.updateMatrix(); trunks.setMatrixAt(i, d.matrix);
     });
-    scene.add(crowns, trunks);
+    scene.add(crowns, trunks); coneTrees = [crowns, trunks];
 
     // 먼 산
     const mtnMat = new THREE.MeshLambertMaterial({ color: 0x7ea08a, flatShading: true });
@@ -648,7 +658,7 @@ const R3D = (() => {
     const len = count * 8, mid = i0 + Math.floor(count / 2);
     const [x, z] = P(mid, off), a = ang(mid);
     if (C.nearest(T, x, z, -1).dist < C.WALL + 20) return;
-    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = -a; scene.add(g);
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = -a; scene.add(g); standCenters.push([x, z]);
     const s = flip ? 1 : -1; // 트랙에서 멀어지는 방향 (로컬 z)
     const concrete = new THREE.MeshLambertMaterial({ color: 0xb8bcc4 }), seat = new THREE.MeshLambertMaterial({ color: 0x2a5db0 });
     const crowdN = 7 * Math.floor(len / 7);
@@ -676,37 +686,114 @@ const R3D = (() => {
     root.traverse((o) => {
       if (o.isMesh) {
         o.castShadow = true; o.receiveShadow = true;
-        const m = o.material; if (m && m.map) { m.map.encoding = THREE.LinearEncoding; m.map.needsUpdate = true; }
       }
     });
     return root;
   }
+  const FILES = {
+    red: 'racing/vehicle-truck-red', purple: 'racing/vehicle-truck-purple', yellow: 'racing/vehicle-truck-yellow', green: 'racing/vehicle-truck-green',
+    tents: 'racing/decoration-tents', character: 'platformer/character', cloud: 'platformer/cloud', flag: 'platformer/flag',
+    bA: 'city/building-small-a', bB: 'city/building-small-b', bC: 'city/building-small-c', bD: 'city/building-small-d', garage: 'city/building-garage',
+    clump: 'city/grass-trees-tall', tree: 'basic/tree',
+  };
   function loadModels(base) {
     if (!THREE.GLTFLoader) return Promise.resolve(false);
     const loader = new THREE.GLTFLoader();
-    const get = (n) => new Promise((res) => loader.load(base + n + '.glb', (g) => res(prepModel(g.scene)), undefined, () => res(null)));
-    return Promise.all(['red', 'purple', 'yellow', 'green'].map((c) => get('vehicle-truck-' + c)).concat([get('decoration-tents'), get('decoration-forest')]))
-      .then((arr) => {
-        if (arr.slice(0, 4).some((x) => !x)) return false;
-        models = { red: arr[0], purple: arr[1], yellow: arr[2], green: arr[3] };
-        deco = { tents: arr[4], forest: arr[5] };
-        for (const [, v] of karts) scene.remove(v.g);
-        karts.clear();
-        placeDeco();
-        return true;
+    const keys = Object.keys(FILES);
+    const get = (k) => new Promise((res) => loader.load(base + FILES[k] + '.glb', (g) => res(prepModel(g.scene)), undefined, () => res(null)));
+    return Promise.all(keys.map(get)).then((arr) => {
+      keys.forEach((k, i) => { lib[k] = arr[i]; });
+      if (lib.red && lib.purple && lib.yellow && lib.green) models = { red: lib.red, purple: lib.purple, yellow: lib.yellow, green: lib.green };
+      deco = { tents: lib.tents };
+      for (const [, v] of karts) scene.remove(v.g);
+      karts.clear();
+      placeDeco();
+      return true;
+    });
+  }
+  // 모델을 원하는 높이로 맞추고 바닥을 y=0에, 가운데를 원점에
+  function fitted(src, h) {
+    const o = src.clone(true), g = new THREE.Group(); g.add(o); g.updateMatrixWorld(true);
+    let b = new THREE.Box3().setFromObject(o);
+    o.scale.multiplyScalar(h / Math.max(1e-6, b.max.y - b.min.y)); g.updateMatrixWorld(true);
+    b = new THREE.Box3().setFromObject(o);
+    o.position.x -= (b.min.x + b.max.x) / 2; o.position.z -= (b.min.z + b.max.z) / 2; o.position.y -= b.min.y;
+    g.updateMatrixWorld(true);
+    return g;
+  }
+  function instanceFrom(src, h, list, shadow) {
+    if (!src || !list.length) return;
+    const w = fitted(src, h), meshes = [], d = new THREE.Object3D(), mm = new THREE.Matrix4();
+    w.traverse((m) => { if (m.isMesh) meshes.push(m); });
+    for (const m of meshes) {
+      const im = new THREE.InstancedMesh(m.geometry, m.material, list.length);
+      im.castShadow = shadow && HQ; im.receiveShadow = HQ;
+      list.forEach((t, i) => {
+        d.position.set(t.x, t.yy || 0, t.y); d.rotation.set(0, t.rot != null ? t.rot : i * 1.7, 0); d.scale.setScalar(t.s || 1); d.updateMatrix();
+        im.setMatrixAt(i, mm.multiplyMatrices(d.matrix, m.matrixWorld));
       });
+      scene.add(im);
+    }
   }
   function placeDeco() {
-    if (!deco) return;
-    // 텐트(정비 구역) 몇 군데
-    if (deco.tents) {
+    const rnd = (() => { let s = 11; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+    const Wl = C.WALL, placed = [];
+    const free = (x, z, rad) => C.nearest(T, x, z, -1).dist > Wl + rad && placed.every((p) => Math.hypot(p[0] - x, p[1] - z) > p[2] + rad) && standCenters.every((c) => Math.hypot(c[0] - x, c[1] - z) > 330);
+    // 텐트
+    if (lib.tents) {
       let n = 0;
-      for (let i = 60; i < T.N && n < 6; i += 131) {
-        const side = n % 2 ? 1 : -1, [x, z] = P(i, side * (C.WALL + 95));
-        if (C.nearest(T, x, z, -1).dist < C.WALL + 70) continue;
-        const t = deco.tents.clone(true); t.scale.setScalar(13); t.position.set(x, 0, z); t.rotation.y = -ang(i) + (side > 0 ? Math.PI : 0); scene.add(t); n++;
+      for (let i = 60; i < T.N && n < 5; i += 151) {
+        const side = n % 2 ? 1 : -1, [x, z] = P(i, side * (Wl + 95));
+        if (!free(x, z, 70)) continue;
+        const t = fitted(lib.tents, 45); t.position.set(x, 0, z); t.rotation.y = -ang(i); scene.add(t); placed.push([x, z, 70]); n++;
       }
     }
+    // 마을 건물
+    const kinds = ['bA', 'bB', 'bC', 'bD', 'garage'].filter((k) => lib[k]);
+    if (kinds.length) {
+      let n = 0;
+      for (let i = 0; i < T.N && n < 34; i += 19) {
+        for (const side of [1, -1]) {
+          const off = side * (Wl + 85 + rnd() * 140), [x, z] = P(i, off);
+          if (!free(x, z, 60)) continue;
+          const k = kinds[Math.floor(rnd() * kinds.length)];
+          const b = fitted(lib[k], k === 'garage' ? 45 : 70 + rnd() * 45);
+          const nr = C.nearest(T, x, z, -1);
+          b.position.set(x, 0, z); b.rotation.y = Math.atan2(nr.cx - x, nr.cy - z);
+          b.traverse((o) => { if (o.isMesh) { o.castShadow = HQ; o.receiveShadow = HQ; } });
+          scene.add(b); placed.push([x, z, 60]); n++;
+        }
+      }
+    }
+    // 나무 (원뿔 나무 대신 3D 모델)
+    const tl = [], cl = [];
+    for (let i = 0; i < 320; i++) {
+      const x = -900 + rnd() * 3200, z = -900 + rnd() * 3200;
+      if (!free(x, z, 40)) continue;
+      (rnd() < 0.7 ? tl : cl).push({ x, y: z, s: 0.75 + rnd() * 0.6, rot: rnd() * 6.28 });
+    }
+    if (lib.tree || lib.clump) coneTrees.forEach((m) => { m.visible = false; });
+    instanceFrom(lib.tree, 62, tl, true);
+    instanceFrom(lib.clump, 48, cl, true);
+    // 깃발 (바깥 펜스를 따라)
+    const fl = [];
+    for (let i = 0; i < T.N; i += 22) for (const side of [1, -1]) {
+      if (folded(i, side * (Wl + 18))) continue;
+      const [x, z] = P(i, side * (Wl + 18));
+      if (C.nearest(T, x, z, -1).dist < Wl + 10) continue;
+      fl.push({ x, y: z, rot: -ang(i) + Math.PI / 2 });
+    }
+    instanceFrom(lib.flag, 36, fl, false);
+    // 구름
+    const cls = [];
+    for (let i = 0; i < 16; i++) cls.push({ x: -1500 + rnd() * 4500, y: -1500 + rnd() * 4500, yy: 450 + rnd() * 400, s: 1 + rnd() * 1.4, rot: rnd() * 6 });
+    instanceFrom(lib.cloud, 90, cls, false);
+  }
+  function addDriver(parent, x, y, z, h) {
+    if (!lib.character) return false;
+    const c = fitted(lib.character, h); c.position.set(x, y, z); c.rotation.y = Math.PI / 2;
+    c.traverse((o) => { if (o.isMesh) o.castShadow = HQ; });
+    parent.add(c); return true;
   }
 
   function makeKartModel(color) {
@@ -731,10 +818,10 @@ const R3D = (() => {
   function shade(hex, f) { const c = new THREE.Color(hex); return f >= 0 ? c.lerp(new THREE.Color(0xffffff), f) : c.multiplyScalar(1 + f); }
   function makeDragon(color) {
     const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
-    const main = new THREE.MeshLambertMaterial({ color: shade(color, -0.05) });
-    const darkM = new THREE.MeshLambertMaterial({ color: shade(color, -0.35) });
-    const belly = new THREE.MeshLambertMaterial({ color: shade(color, 0.55) });
-    const wingM = new THREE.MeshLambertMaterial({ color: shade(color, -0.2), side: THREE.DoubleSide });
+    const main = new THREE.MeshStandardMaterial({ color: shade(color, -0.05), roughness: 0.45, metalness: 0.05 });
+    const darkM = new THREE.MeshStandardMaterial({ color: shade(color, -0.35), roughness: 0.5 });
+    const belly = new THREE.MeshStandardMaterial({ color: shade(color, 0.55), roughness: 0.6 });
+    const wingM = new THREE.MeshStandardMaterial({ color: shade(color, -0.2), roughness: 0.6, side: THREE.DoubleSide });
     const white = new THREE.MeshLambertMaterial({ color: 0xffffff }), black = new THREE.MeshBasicMaterial({ color: 0x111111 });
     const horn = new THREE.MeshLambertMaterial({ color: 0x5a5560 }), mouth = new THREE.MeshLambertMaterial({ color: 0x5a1a1a });
     const iris = new THREE.MeshLambertMaterial({ color: shade(color, -0.1) });
@@ -808,6 +895,7 @@ const R3D = (() => {
       tail.push(seg); parent = seg;
     }
     const tip = cone(darkM, 2.2, 5, -4.5, 0.5, 0, 0, Math.PI / 2, parent);
+    addDriver(body, -3, 13, 0, 15);
     // 입에서 나오는 불 (부스터)
     const fireO = new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.85 });
     const fireY = new THREE.MeshBasicMaterial({ color: 0xffe14a, transparent: true, opacity: 0.95 });
@@ -821,12 +909,11 @@ const R3D = (() => {
 
   function makeKart(color, type) {
     if (type === 'dragon') return makeDragon(color);
-    const fromModel = makeKartModel(color);
-    if (fromModel) return fromModel;
+    if (type === 'truck') { const fromModel = makeKartModel(color); if (fromModel) return fromModel; }
     const g = new THREE.Group();
-    const paint = new THREE.MeshLambertMaterial({ color });
-    const dark = new THREE.MeshLambertMaterial({ color: 0x1b1b1d });
-    const metal = new THREE.MeshLambertMaterial({ color: 0x9aa0a8 });
+    const paint = new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.15 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.8 });
+    const metal = new THREE.MeshStandardMaterial({ color: 0xb8bec6, roughness: 0.25, metalness: 0.85 });
     const body = new THREE.Group(); g.add(body);
     const add = (geo, mat, x, y, z, parent, rx, ry, rz) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (rx || ry || rz) m.rotation.set(rx || 0, ry || 0, rz || 0); m.castShadow = true; (parent || body).add(m); return m; };
     add(new THREE.BoxGeometry(34, 2, 18), dark, 0, 4, 0);                         // 섀시
@@ -842,8 +929,10 @@ const R3D = (() => {
     add(new THREE.BoxGeometry(5, 3, 26), paint, -21, 17, 0);                      // 리어 윙
     add(new THREE.BoxGeometry(2, 9, 2), dark, -21, 12, 9); add(new THREE.BoxGeometry(2, 9, 2), dark, -21, 12, -9);
     const plate = canvasTex(64, 64, (c, w) => { c.fillStyle = '#fff'; c.fillRect(0, 0, w, w); c.fillStyle = '#111'; c.font = 'bold 44px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(1 + karts.size % 9), w / 2, w / 2 + 2); });
-    const pl = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), new THREE.MeshBasicMaterial({ map: plate })); pl.position.set(18, 9.1, 0); pl.rotation.set(-Math.PI / 2, 0, -Math.PI / 2); body.add(pl);
-    // 드라이버
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), new THREE.MeshBasicMaterial({ map: plate })); pl.position.set(18, 9.1, 0); pl.rotation.set(-Math.PI / 2, 0, Math.PI / 2); body.add(pl);
+    // 드라이버 (로봇 캐릭터, 없으면 블록 드라이버)
+    add(new THREE.TorusGeometry(2.6, 0.6, 6, 14), dark, 6.5, 11, 0, null, 0, Math.PI / 2, 0.9);
+    if (!addDriver(body, -4, 6, 0, 17)) {
     add(new THREE.BoxGeometry(7, 9, 9), paint, -3, 13, 0);                        // 몸통
     add(new THREE.BoxGeometry(9, 2.4, 2.4), paint, 1.5, 14.5, 4.2, null, 0, 0, -0.35); // 팔
     add(new THREE.BoxGeometry(9, 2.4, 2.4), paint, 1.5, 14.5, -4.2, null, 0, 0, -0.35);
@@ -851,6 +940,7 @@ const R3D = (() => {
     add(new THREE.SphereGeometry(5.3, 14, 12), paint, -3, 21.5, 0);               // 헬멧
     add(new THREE.BoxGeometry(2, 3, 7.5), new THREE.MeshLambertMaterial({ color: 0x222c3a }), 1.9, 22, 0); // 바이저
     add(new THREE.BoxGeometry(1, 1.4, 10.8), new THREE.MeshLambertMaterial({ color: 0xffffff }), -3, 24.2, 0); // 헬멧 줄무늬
+    }
     // 바퀴
     const tireG = new THREE.CylinderGeometry(5, 5, 5.5, 16); tireG.rotateX(Math.PI / 2);
     const rimG = new THREE.CylinderGeometry(2.6, 2.6, 5.8, 8); rimG.rotateX(Math.PI / 2);
@@ -1010,7 +1100,7 @@ for (const f of [0.18, 0.42, 0.66, 0.88]) {
   for (const off of [-42, 0, 42]) boxes.push({ x: T.xs[i] - T.dy[i] * off, y: T.ys[i] + T.dx[i] * off, back: 0 });
 }
 const boxActive = boxes.map(() => true);
-R3D.init(T, trees, boxes);
+R3D.init(T, trees, boxes, { low: (() => { try { return localStorage.getItem('kart-gfx') === 'low'; } catch (e) { return false; } })() });
 R3D.loadModels('models/').catch(() => {});
 
 // ---------- state ----------
@@ -1020,8 +1110,9 @@ let roomNs = null, R = null, isHost = false, roomCode = '', joinTime = 0, mySlot
 let hostOffset = 0, offsetMax = -Infinity, hostPeerId = null, lastHostPres = null;
 const remotes = new Map();
 let camA = 0, camX = 0, camY = 0, menuT = 0;
-let view = '2d', kartType = 'dragon';
-try { kartType = localStorage.getItem('kart-type') === 'truck' ? 'truck' : 'dragon'; } catch (e) {}
+const KTYPES = ['kart', 'dragon', 'truck'], KNAMES = { kart: '🏎️ 클래식 카트', dragon: '🐉 드래곤 카트', truck: '🛻 레이싱 트럭' };
+let view = '2d', kartType = 'kart', gfxLow = false;
+try { const t = localStorage.getItem('kart-type'); if (KTYPES.includes(t)) kartType = t; gfxLow = localStorage.getItem('kart-gfx') === 'low'; } catch (e) {}
 try { view = localStorage.getItem('kart-view') === '3d' ? '3d' : '2d'; } catch (e) {}
 let lastSend = 0, showResults = false, resultsKey = '', flash = '', flashUntil = 0, clockT = 0;
 const input = { left: false, right: false, drift: false, brake: false, gas: true };
@@ -1090,7 +1181,7 @@ function showPanel(which) {
 function startSolo() {
   getNick(); mode = 'solo';
   me = C.newKart(T, 0);
-  bots = [1, 2, 3].map((s, i) => { const k = C.newKart(T, s); k.baseMul = [0.97, 0.94, 0.91][i]; k.lane = [22, -18, 8][i]; k.name = ['토끼봇', '거북봇', '여우봇'][i]; k.kt = i === 1 ? 'truck' : 'dragon'; k.color = COLORS[s]; return k; });
+  bots = [1, 2, 3].map((s, i) => { const k = C.newKart(T, s); k.baseMul = [0.97, 0.94, 0.91][i]; k.lane = [22, -18, 8][i]; k.name = ['토끼봇', '거북봇', '여우봇'][i]; k.kt = ['dragon', 'kart', 'truck'][i]; k.color = COLORS[s]; return k; });
   newSoloRace();
   enterGameUI();
 }
@@ -1212,7 +1303,7 @@ function updateRoom() {
     let r = remotes.get(p.peer);
     if (!r) { r = { x: q.x, y: q.y, a: q.a, pres: null }; remotes.set(p.peer, r); }
     if (r.pres !== q) { r.pres = q; r.recv = Date.now(); }
-    r.color = COLORS[Math.min(idx, 3)]; r.name = clean(q.n) || '?'; r.kt = q.kt === 'truck' ? 'truck' : 'dragon';
+    r.color = COLORS[Math.min(idx, 3)]; r.name = clean(q.n) || '?'; r.kt = KTYPES.includes(q.kt) ? q.kt : 'dragon';
   });
   for (const k of remotes.keys()) if (!seen.has(k)) remotes.delete(k);
   $('roomtag').textContent = '방 ' + roomCode + ' · ' + Math.min(list.length, 4) + '/4명 · 🔗초대';
@@ -1335,8 +1426,10 @@ function setView(v) {
 }
 $('viewBtn2').onclick = () => setView(view === '3d' ? '2d' : '3d');
 $('viewMenu').onclick = () => setView(view === '3d' ? '2d' : '3d');
-const typeLabel = () => { $('typeMenu').textContent = '차량: ' + (kartType === 'dragon' ? '🐉 드래곤 카트' : '🛻 레이싱 트럭') + ' (눌러서 바꾸기)'; };
-$('typeMenu').onclick = () => { kartType = kartType === 'dragon' ? 'truck' : 'dragon'; try { localStorage.setItem('kart-type', kartType); } catch (e) {} typeLabel(); };
+const typeLabel = () => { $('typeMenu').textContent = '차량: ' + KNAMES[kartType] + ' (눌러서 바꾸기)'; };
+$('typeMenu').onclick = () => { kartType = KTYPES[(KTYPES.indexOf(kartType) + 1) % KTYPES.length]; try { localStorage.setItem('kart-type', kartType); } catch (e) {} typeLabel(); };
+$('gfxMenu').textContent = '그래픽: ' + (gfxLow ? '가볍게 (빠름)' : '고화질') + ' (눌러서 바꾸기)';
+$('gfxMenu').onclick = () => { try { localStorage.setItem('kart-gfx', gfxLow ? 'high' : 'low'); } catch (e) {} location.reload(); };
 typeLabel();
 setView(view);
 
