@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>카트 레이서 4P</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:#3d7a3a;font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:#fff;user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none}
+  #c{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .hidden{display:none!important}
+  #hud{position:fixed;inset:0;pointer-events:none}
+  #info{position:absolute;left:10px;top:10px;background:rgba(0,0,0,.45);border-radius:12px;padding:8px 12px;font-weight:700;line-height:1.35;font-size:15px;min-width:120px}
+  #info .big{font-size:22px}
+  #mini{position:absolute;right:10px;top:56px;width:110px;height:110px;background:rgba(0,0,0,.35);border-radius:12px}
+  #topbar{position:absolute;right:10px;top:10px;display:flex;gap:6px;align-items:center;pointer-events:auto}
+  #roomtag{pointer-events:auto;background:rgba(0,0,0,.45);border-radius:10px;padding:7px 10px;font-weight:700;font-size:13px}
+  .tbtn{border:0;border-radius:10px;padding:8px 12px;font-weight:800;font-size:14px;background:#ffd23f;color:#222}
+  .tbtn.gray{background:rgba(255,255,255,.85)}
+  #startBtn{position:absolute;left:50%;top:64px;transform:translateX(-50%);font-size:18px;padding:12px 22px;pointer-events:auto;box-shadow:0 4px 0 #b8860b}
+  #center{position:absolute;left:0;right:0;top:30%;text-align:center;font-size:84px;font-weight:900;color:#ffd23f;text-shadow:0 4px 0 #a2560a,0 0 20px rgba(0,0,0,.4)}
+  #msg{position:absolute;left:0;right:0;top:20%;text-align:center;font-size:22px;font-weight:800;text-shadow:0 2px 4px #000}
+  #speed{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);text-align:center;font-weight:900;font-size:22px;text-shadow:0 2px 3px #000}
+  #gauge{width:120px;height:10px;border-radius:5px;background:rgba(0,0,0,.5);margin:4px auto 0;overflow:hidden}
+  #gfill{height:100%;width:0;background:#999}
+  .ctl{position:absolute;bottom:18px;width:84px;height:84px;border-radius:50%;background:rgba(255,255,255,.22);border:3px solid rgba(255,255,255,.55);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:30px;pointer-events:auto;touch-action:none}
+  .ctl.on{background:rgba(255,210,63,.55)}
+  #bl{left:14px}#br{left:110px}
+  #bd{right:14px;width:104px;height:104px;font-size:17px}
+  #bb{right:128px;bottom:22px;width:72px;height:72px;font-size:14px}
+  #panel{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,30,15,.55);padding:16px}
+  .card{background:#fff;color:#222;border-radius:20px;padding:20px;width:min(380px,100%);box-shadow:0 10px 30px rgba(0,0,0,.35);max-height:100%;overflow:auto}
+  .card h1{margin:0 0 4px;font-size:28px;text-align:center}
+  .card h2{margin:0 0 10px;font-size:22px;text-align:center}
+  .sub{text-align:center;color:#666;font-size:13px;margin-bottom:14px}
+  .card input{width:100%;font-size:18px;padding:11px 12px;border-radius:12px;border:2px solid #ddd;margin-bottom:10px;text-align:center;user-select:text;-webkit-user-select:text}
+  .btn{display:block;width:100%;border:0;border-radius:14px;padding:13px;font-size:17px;font-weight:800;margin-bottom:9px;background:#ff5a3d;color:#fff}
+  .btn.blue{background:#2f7cf6}.btn.green{background:#26a65b}.btn.gray{background:#e6e6e6;color:#333}
+  .btn:disabled{opacity:.45}
+  .row{display:flex;gap:8px}.row input{margin:0;flex:1}.row .btn{width:auto;margin:0;padding:0 16px}
+  #status{text-align:center;font-size:13px;color:#c0392b;min-height:18px;margin-top:4px}
+  .help{font-size:12px;color:#777;margin-top:10px;line-height:1.5}
+  #results{pointer-events:auto}
+  .res{list-style:none;margin:0 0 14px;padding:0}
+  .res li{display:flex;align-items:center;gap:10px;padding:9px 6px;border-bottom:1px solid #eee;font-weight:700}
+  .dot{width:14px;height:14px;border-radius:50%;flex:none}
+  .res .t{margin-left:auto;font-variant-numeric:tabular-nums;color:#555}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud" class="hidden">
+  <div id="info"></div>
+  <canvas id="mini" width="220" height="220"></canvas>
+  <div id="topbar"><div id="roomtag" class="hidden"></div><button id="exitBtn" class="tbtn gray">나가기</button></div>
+  <button id="startBtn" class="tbtn hidden">레이스 시작</button>
+  <div id="msg"></div>
+  <div id="center"></div>
+  <div id="speed"><span id="kmh">0</span> km/h<div id="gauge"><div id="gfill"></div></div></div>
+  <div class="ctl" id="bl">◀</div><div class="ctl" id="br">▶</div>
+  <div class="ctl" id="bb">브레이크</div><div class="ctl" id="bd">드리프트</div>
+</div>
+<div id="panel">
+  <div class="card" id="menu">
+    <h1>🏁 카트 레이서</h1>
+    <div class="sub">최대 4명 · 3바퀴 · 드리프트 부스터<br>방 코드로 누구나 참가 (와이파이·데이터)</div>
+    <input id="nick" maxlength="8" placeholder="닉네임">
+    <button class="btn" id="createBtn" disabled>방 만들기</button>
+    <div class="row"><input id="codeIn" inputmode="numeric" maxlength="4" placeholder="방 코드 4자리"><button class="btn blue" id="joinBtn" disabled>참가</button></div>
+    <div style="height:9px"></div>
+    <button class="btn green" id="soloBtn">혼자 연습 (컴퓨터 3대)</button>
+    <div id="status">멀티플레이 연결 확인 중...</div>
+    <div class="help">조작: ◀ ▶ 핸들 · 가속은 자동 · <b>드리프트</b>를 누른 채 꺾다가 놓으면 부스터 (게이지 노랑=작은 부스터, 주황=큰 부스터)</div>
+  </div>
+  <div class="card hidden" id="results"></div>
+</div>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+const CORE = (() => {
+  const CTRL = [[0,0],[800,0],[1100,150],[1150,450],[950,650],[700,600],[550,750],[600,1000],[400,1150],[100,1100],[-50,900],[150,700],[100,450],[-200,400],[-300,150]];
+  const HALF = 75, WALL = 120, SPACING = 8, KART_R = 13;
+  const P = { MAX: 430, ACC: 300, BRK: 600, REV: 150, BOOST: 640, TURN: 2.5, DRIFT_TURN: 3.4, GRIP: 9, DRIFT_GRIP: 2.0, SMALL: 0.6, BIG: 1.4 };
+
+  function buildTrack() {
+    const SC = 1.3, n = CTRL.length, dense = [];
+    for (let i = 0; i < n; i++) {
+      const g = (q) => [CTRL[q][0] * SC, CTRL[q][1] * SC]; const p0 = g((i - 1 + n) % n), p1 = g(i), p2 = g((i + 1) % n), p3 = g((i + 2) % n);
+      for (let k = 0; k < 40; k++) {
+        const t = k / 40, t2 = t * t, t3 = t2 * t;
+        const f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+        dense.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]);
+      }
+    }
+    const M = dense.length, dc = [0];
+    for (let i = 1; i <= M; i++) { const a = dense[i - 1], b = dense[i % M]; dc.push(dc[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+    const total = dc[M], N = Math.round(total / SPACING);
+    const xs = new Float64Array(N), ys = new Float64Array(N);
+    let j = 0;
+    for (let k = 0; k < N; k++) {
+      const s = k * total / N;
+      while (dc[j + 1] < s) j++;
+      const a = dense[j], b = dense[(j + 1) % M], t = (s - dc[j]) / (dc[j + 1] - dc[j]);
+      xs[k] = a[0] + (b[0] - a[0]) * t; ys[k] = a[1] + (b[1] - a[1]) * t;
+    }
+    const dx = new Float64Array(N), dy = new Float64Array(N), seg = new Float64Array(N), cum = new Float64Array(N + 1);
+    for (let k = 0; k < N; k++) {
+      const m = (k + 1) % N, l = Math.hypot(xs[m] - xs[k], ys[m] - ys[k]);
+      dx[k] = (xs[m] - xs[k]) / l; dy[k] = (ys[m] - ys[k]) / l; seg[k] = l; cum[k + 1] = cum[k] + l;
+    }
+    return { N, xs, ys, dx, dy, seg, cum, L: cum[N] };
+  }
+
+  function nearest(T, x, y, hint) {
+    let best = Infinity, bi = 0, bt = 0;
+    const scan = (i) => {
+      const ax = T.xs[i], ay = T.ys[i], l = T.seg[i];
+      let t = (x - ax) * T.dx[i] + (y - ay) * T.dy[i];
+      t = t < 0 ? 0 : t > l ? l : t;
+      const cx = ax + T.dx[i] * t, cy = ay + T.dy[i] * t, d = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+      if (d < best) { best = d; bi = i; bt = t; }
+    };
+    if (hint < 0) for (let i = 0; i < T.N; i++) scan(i);
+    else for (let o = -40; o <= 40; o++) scan((hint + o + T.N) % T.N);
+    return { i: bi, s: T.cum[bi] + bt, cx: T.xs[bi] + T.dx[bi] * bt, cy: T.ys[bi] + T.dy[bi] * bt, dist: Math.sqrt(best) };
+  }
+
+  const wrapA = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
+  const approach = (v, t, d) => v < t ? Math.min(t, v + d) : Math.max(t, v - d);
+
+  function spawnPose(T, slot) {
+    const back = 45 + Math.floor(slot / 2) * 50, lat = (slot % 2 ? 1 : -1) * 32;
+    const dx = T.dx[0], dy = T.dy[0];
+    return { x: T.xs[0] - dx * back - dy * lat, y: T.ys[0] - dy * back + dx * lat, a: Math.atan2(dy, dx) };
+  }
+
+  function resetKart(k, T, slot) {
+    const p = spawnPose(T, slot);
+    Object.assign(k, { x: p.x, y: p.y, a: p.a, vx: 0, vy: 0, speed: 0, drifting: false, charge: 0, boost: 0, off: false, rl: 0, fin: -1 });
+    const n = nearest(T, k.x, k.y, -1); k.ti = n.i; k.s = n.s;
+    return k;
+  }
+  const newKart = (T, slot) => resetKart({ maxMul: 1 }, T, slot);
+  const progress = (k, T) => (k.rl - 1) * T.L + k.s;
+
+  function stepKart(k, inp, dt, canDrive, T) {
+    const steer = canDrive ? (inp.right ? 1 : 0) - (inp.left ? 1 : 0) : 0;
+    const brake = canDrive && inp.brake, gas = canDrive && inp.gas && !brake;
+    const wantDrift = canDrive && inp.drift && steer !== 0 && k.speed > 180;
+    if (wantDrift) { k.drifting = true; k.charge += dt; }
+    else {
+      if (k.drifting) { if (k.charge >= P.BIG) k.boost = 1.5; else if (k.charge >= P.SMALL) k.boost = 0.8; }
+      k.drifting = false; k.charge = 0;
+    }
+    const maxS = P.MAX * k.maxMul * (k.off ? 0.45 : 1);
+    if (k.boost > 0) { k.boost -= dt; k.speed = approach(k.speed, P.BOOST * (k.off ? 0.6 : 1), P.ACC * 3 * dt); }
+    else if (gas) k.speed = approach(k.speed, maxS, (k.speed > maxS ? P.ACC * 1.5 : P.ACC) * dt);
+    else if (brake) k.speed = approach(k.speed, -P.REV, P.BRK * dt);
+    else k.speed = approach(k.speed, 0, P.ACC * (k.off ? 1.2 : 0.5) * dt);
+
+    const tf = Math.min(1, Math.abs(k.speed) / 120) * Math.sign(k.speed);
+    k.a = wrapA(k.a + steer * (k.drifting ? P.DRIFT_TURN : P.TURN) * tf * dt);
+    const f = 1 - Math.exp(-(k.drifting ? P.DRIFT_GRIP : P.GRIP) * dt);
+    k.vx += (Math.cos(k.a) * k.speed - k.vx) * f;
+    k.vy += (Math.sin(k.a) * k.speed - k.vy) * f;
+    k.x += k.vx * dt; k.y += k.vy * dt;
+
+    const n = nearest(T, k.x, k.y, k.ti);
+    k.ti = n.i; k.off = n.dist > HALF;
+    if (n.dist > WALL - KART_R) {
+      const nx = (k.x - n.cx) / n.dist, ny = (k.y - n.cy) / n.dist, lim = WALL - KART_R;
+      k.x = n.cx + nx * lim; k.y = n.cy + ny * lim;
+      const vn = k.vx * nx + k.vy * ny;
+      if (vn > 0) {
+        k.vx -= vn * nx * 1.3; k.vy -= vn * ny * 1.3;
+        if (k.speed > 0) k.speed = Math.max(0, k.speed - vn * 0.9);
+        k.hit = vn;
+      }
+      k.speed *= 0.995;
+    }
+    const ds = n.s - k.s;
+    if (ds < -T.L / 2) k.rl++; else if (ds > T.L / 2) k.rl--;
+    k.s = n.s;
+  }
+
+  function collide(a, b, moveB) {
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = KART_R * 2;
+    if (d >= min || d < 0.001) return false;
+    const nx = dx / d, ny = dy / d, ov = min - d;
+    if (moveB) { a.x -= nx * ov / 2; a.y -= ny * ov / 2; b.x += nx * ov / 2; b.y += ny * ov / 2; b.speed *= 0.97; }
+    else { a.x -= nx * ov; a.y -= ny * ov; }
+    a.speed *= 0.97;
+    return true;
+  }
+
+  function botInput(k, T, lane) {
+    const look = 8 + Math.floor(Math.abs(k.speed) / 35);
+    const j = (k.ti + look) % T.N;
+    const tx = T.xs[j] - T.dy[j] * lane, ty = T.ys[j] + T.dx[j] * lane;
+    const diff = wrapA(Math.atan2(ty - k.y, tx - k.x) - k.a);
+    const j2 = (k.ti + look + 18) % T.N;
+    const turn = Math.abs(wrapA(Math.atan2(T.dy[j2], T.dx[j2]) - Math.atan2(T.dy[k.ti], T.dx[k.ti])));
+    const slow = turn > 0.9 && k.speed > 330;
+    return { left: diff < -0.04, right: diff > 0.04, gas: !slow, brake: turn > 1.4 && k.speed > 300, drift: false };
+  }
+
+  return { HALF, WALL, KART_R, P, buildTrack, nearest, wrapA, spawnPose, resetKart, newKart, progress, stepKart, collide, botInput };
+})();
+if (typeof module !== 'undefined') module.exports = CORE;
+</script>
+<script>
+// P2P 연결 (PeerJS). 방장 폰이 서버 역할: 참가자 상태를 모아 모두에게 다시 뿌림
+const NET = (() => {
+  const PREFIX = 'kartracer4p-v1-';
+  const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : 0;
+  function sanitize(p) {
+    if (!p || typeof p !== 'object') return Object.freeze({});
+    const o = {
+      n: typeof p.n === 'string' ? p.n.slice(0, 12) : '?', jt: num(p.jt), host: p.host === true, sl: num(p.sl),
+      x: num(p.x), y: num(p.y), a: num(p.a), sp: num(p.sp), dr: p.dr ? 1 : 0, bo: p.bo ? 1 : 0,
+      rl: num(p.rl), s: num(p.s), fin: typeof p.fin === 'number' ? p.fin : -1, rid: typeof p.rid === 'string' ? p.rid.slice(0, 40) : null,
+    };
+    if (typeof p.hn === 'number') o.hn = p.hn;
+    if (p.race && typeof p.race === 'object' && typeof p.race.id === 'string' && typeof p.race.start === 'number')
+      o.race = { id: p.race.id.slice(0, 40), start: p.race.start, laps: Math.max(1, Math.min(9, num(p.race.laps) || 3)) };
+    return Object.freeze(o);
+  }
+
+  function open(code, asHost, onClose) {
+    return new Promise((resolve, reject) => {
+      const peer = asHost ? new Peer(PREFIX + code) : new Peer();
+      const others = new Map(), conns = new Map();
+      let mine = Object.freeze({}), mineAt = Date.now(), myId = 'me', hostConn = null, settled = false, closed = false;
+      const fail = (msg) => { if (!settled) { settled = true; try { peer.destroy(); } catch (e) {} reject(new Error(msg)); } };
+      const timer = setTimeout(() => fail(asHost ? '서버 연결 시간 초과' : '방을 찾을 수 없어요'), 15000);
+      const close = (msg) => { if (closed) return; closed = true; try { peer.destroy(); } catch (e) {} if (settled) onClose(msg); };
+
+      const api = {
+        peers() {
+          const list = [{ peer: myId, isMe: true, sameTab: true, kind: 'viewer', presence: mine, updatedAt: mineAt }];
+          for (const [id, v] of others) list.push({ peer: id, isMe: false, sameTab: false, kind: 'viewer', presence: v.presence, updatedAt: v.updatedAt });
+          return list;
+        },
+        async presence(patch) {
+          const m = { ...mine };
+          for (const k in patch) { if (patch[k] === null) delete m[k]; else m[k] = patch[k]; }
+          mine = Object.freeze(m); mineAt = Date.now();
+          if (asHost) {
+            const list = [[myId, mine]];
+            for (const [id, v] of others) list.push([id, v.presence]);
+            for (const c of conns.values()) if (c.open) c.send({ t: 'w', list });
+          } else if (hostConn && hostConn.open) hostConn.send({ t: 'st', p: mine });
+        },
+        async leave() { closed = true; try { peer.destroy(); } catch (e) {} },
+      };
+
+      peer.on('error', (e) => {
+        const t = e && e.type;
+        if (t === 'unavailable-id') fail('taken');
+        else if (t === 'peer-unavailable') fail('방을 찾을 수 없어요. 코드를 확인하세요');
+        else if (!settled) fail('연결 실패 (' + (t || 'error') + ')');
+        else if (t === 'network' || t === 'server-error' || t === 'socket-error') { /* signaling lost; data channels may still work */ }
+      });
+
+      if (asHost) {
+        peer.on('open', (id) => { myId = id; clearTimeout(timer); settled = true; resolve(api); });
+        peer.on('connection', (conn) => {
+          conn.on('open', () => {
+            if (conns.size >= 3) { conn.send({ t: 'full' }); setTimeout(() => conn.close(), 400); return; }
+            conns.set(conn.peer, conn);
+          });
+          conn.on('data', (d) => { if (d && d.t === 'st' && conns.has(conn.peer)) others.set(conn.peer, { presence: sanitize(d.p), updatedAt: Date.now() }); });
+          const drop = () => { conns.delete(conn.peer); others.delete(conn.peer); };
+          conn.on('close', drop); conn.on('error', drop);
+        });
+      } else {
+        peer.on('open', (id) => {
+          myId = id;
+          hostConn = peer.connect(PREFIX + code, { serialization: 'json' });
+          hostConn.on('open', () => { clearTimeout(timer); settled = true; resolve(api); });
+          hostConn.on('data', (d) => {
+            if (!d || typeof d !== 'object') return;
+            if (d.t === 'full') { fail('방이 가득 찼어요 (최대 4명)'); close('방이 가득 찼어요 (최대 4명)'); return; }
+            if (d.t !== 'w' || !Array.isArray(d.list)) return;
+            const seen = new Set(), t = Date.now();
+            for (const item of d.list.slice(0, 4)) {
+              if (!Array.isArray(item) || typeof item[0] !== 'string' || item[0] === myId) continue;
+              seen.add(item[0]); others.set(item[0], { presence: sanitize(item[1]), updatedAt: t });
+            }
+            for (const k of [...others.keys()]) if (!seen.has(k)) others.delete(k);
+          });
+          hostConn.on('close', () => close('방장과 연결이 끊겼어요'));
+          hostConn.on('error', () => close('방장과 연결이 끊겼어요'));
+        });
+      }
+    });
+  }
+  return { open };
+})();
+</script>
+<script>
+(() => {
+const C = CORE, T = C.buildTrack();
+const COLORS = ['#ff4d3d', '#2f7cf6', '#ffc81e', '#26c35b'];
+const LAPS = 3, SEND_MS = 66, STEP = 1 / 120;
+const $ = (id) => document.getElementById(id);
+const cv = $('c'), ctx = cv.getContext('2d'), mini = $('mini'), mctx = mini.getContext('2d');
+
+// ---------- track drawing ----------
+const trackPath = new Path2D();
+for (let i = 0; i < T.N; i++) i ? trackPath.lineTo(T.xs[i], T.ys[i]) : trackPath.moveTo(T.xs[i], T.ys[i]);
+trackPath.closePath();
+let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+for (let i = 0; i < T.N; i++) { minX = Math.min(minX, T.xs[i]); maxX = Math.max(maxX, T.xs[i]); minY = Math.min(minY, T.ys[i]); maxY = Math.max(maxY, T.ys[i]); }
+const trees = [];
+{ let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let n = 0; n < 900 && trees.length < 140; n++) {
+    const x = minX - 400 + rnd() * (maxX - minX + 800), y = minY - 400 + rnd() * (maxY - minY + 800);
+    if (C.nearest(T, x, y, -1).dist > C.WALL + 50) trees.push({ x, y, r: 22 + rnd() * 22 });
+  } }
+
+// ---------- state ----------
+let mode = 'menu', placed = false;            // menu | solo | room
+let me = null, bots = [], race = null, myRaceId = null, seenRaceId = null;
+let roomNs = null, R = null, isHost = false, roomCode = '', joinTime = 0, mySlot = 0;
+let hostOffset = 0, offsetMax = -Infinity, hostPeerId = null, lastHostPres = null;
+const remotes = new Map();
+let lastSend = 0, camA = 0, camX = 0, camY = 0, menuT = 0, showResults = false, resultsKey = '';
+const input = { left: false, right: false, drift: false, brake: false, gas: true };
+let nick = '';
+try { nick = localStorage.getItem('kart-nick') || ''; } catch (e) {}
+$('nick').value = nick;
+
+const now = () => mode === 'room' ? Date.now() + hostOffset : Date.now();
+const fmt = (ms) => { if (ms < 0) ms = 0; const s = ms / 1000, m = Math.floor(s / 60); return String(m).padStart(2, '0') + ':' + (s - m * 60).toFixed(2).padStart(5, '0'); };
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clean = (s) => String(s || '').replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁯﻿]/g, '').trim().slice(0, 8);
+function getNick() { nick = clean($('nick').value) || ('레이서' + Math.floor(Math.random() * 90 + 10)); $('nick').value = nick; try { localStorage.setItem('kart-nick', nick); } catch (e) {} return nick; }
+
+// ---------- multiplayer availability ----------
+(async () => {
+  roomNs = typeof Peer === 'function';
+  if (roomNs) { $('createBtn').disabled = false; $('joinBtn').disabled = false; $('status').textContent = ''; }
+  else $('status').textContent = '연결 모듈을 불러오지 못했어요. 새로고침해 보세요.';
+  const h = (location.hash || '').replace('#', '');
+  if (/^\d{4}$/.test(h)) $('codeIn').value = h;
+})();
+
+// ---------- controls ----------
+function bindBtn(id, key) {
+  const el = $(id); const set = (v) => { input[key] = v; el.classList.toggle('on', v); };
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch (_) {} set(true); });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => el.addEventListener(ev, () => set(false)));
+}
+bindBtn('bl', 'left'); bindBtn('br', 'right'); bindBtn('bd', 'drift'); bindBtn('bb', 'brake');
+const keys = {};
+addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT') return; keys[e.code] = true; syncKeys(); });
+addEventListener('keyup', (e) => { keys[e.code] = false; syncKeys(); });
+let kbUsed = false;
+function syncKeys() {
+  kbUsed = true;
+  input.left = !!(keys.ArrowLeft || keys.KeyA); input.right = !!(keys.ArrowRight || keys.KeyD);
+  input.drift = !!(keys.ShiftLeft || keys.ShiftRight || keys.Space); input.brake = !!(keys.ArrowDown || keys.KeyS);
+}
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// ---------- menu actions ----------
+$('soloBtn').onclick = () => startSolo();
+$('createBtn').onclick = () => enterRoom(String(Math.floor(1000 + Math.random() * 9000)), true);
+$('joinBtn').onclick = () => { const c = $('codeIn').value.replace(/\D/g, ''); if (c.length !== 4) { $('status').textContent = '방 코드 4자리를 입력하세요'; return; } enterRoom(c, false); };
+$('exitBtn').onclick = () => leave();
+$('startBtn').onclick = () => hostStart();
+$('roomtag').onclick = () => {
+  const url = location.origin + location.pathname + '#' + roomCode;
+  const done = () => { $('msg').textContent = '초대 링크를 복사했어요!'; setTimeout(() => { if ($('msg').textContent.startsWith('초대')) $('msg').textContent = ''; }, 1800); };
+  try { navigator.clipboard.writeText(url).then(done, () => { $('msg').textContent = url; }); } catch (e) { $('msg').textContent = url; }
+};
+
+function showPanel(which) {
+  $('panel').classList.toggle('hidden', !which);
+  $('menu').classList.toggle('hidden', which !== 'menu');
+  $('results').classList.toggle('hidden', which !== 'results');
+}
+
+function startSolo() {
+  getNick(); mode = 'solo';
+  me = C.newKart(T, 0);
+  bots = [1, 2, 3].map((s, i) => { const k = C.newKart(T, s); k.maxMul = [0.97, 0.93, 0.89][i]; k.lane = [22, -18, 8][i]; k.name = ['토끼봇', '거북봇', '여우봇'][i]; k.color = COLORS[s]; return k; });
+  newSoloRace();
+  enterGameUI();
+}
+function newSoloRace() {
+  race = { id: 's' + Date.now(), start: Date.now() + 3500, laps: LAPS };
+  C.resetKart(me, T, 0); bots.forEach((b, i) => C.resetKart(b, T, i + 1));
+  myRaceId = race.id; showResults = false; resultsKey = ''; showPanel(null);
+}
+
+async function enterRoom(code, host) {
+  getNick();
+  $('createBtn').disabled = $('joinBtn').disabled = true;
+  $('status').textContent = '연결 중...';
+  const onClose = (m) => { leave(); $('status').textContent = m; };
+  try {
+    for (let tries = 0; ; tries++) {
+      try { R = await NET.open(code, host, onClose); break; }
+      catch (e) { if (host && e.message === 'taken' && tries < 4) { code = String(Math.floor(1000 + Math.random() * 9000)); continue; } throw e; }
+    }
+  } catch (e) {
+    $('status').textContent = e.message === 'taken' ? '방 만들기 실패. 다시 시도하세요' : e.message;
+    $('createBtn').disabled = $('joinBtn').disabled = false; return;
+  }
+  mode = 'room'; roomCode = code; isHost = host; joinTime = Date.now();
+  hostOffset = 0; offsetMax = -Infinity; hostPeerId = null; lastHostPres = null;
+  race = null; myRaceId = null; seenRaceId = null; remotes.clear();
+  me = C.newKart(T, 0); mySlot = -1; placed = false;
+  $('status').textContent = '';
+  await R.presence({ n: nick, jt: joinTime, host: host }).catch(() => {});
+  enterGameUI();
+}
+
+function checkFull() {
+  if (mode !== 'room' || !R) return;
+  const list = roster();
+  const idx = list.findIndex((p) => p.isMe && p.sameTab);
+  if (idx >= 4) { leave(); $('status').textContent = '방이 가득 찼어요 (최대 4명)'; }
+}
+
+function enterGameUI() {
+  $('hud').classList.remove('hidden');
+  const room = mode === 'room';
+  $('roomtag').classList.toggle('hidden', !room);
+  $('mini').style.top = '58px';
+  showPanel(null);
+}
+
+function leave() {
+  if (R) { const r = R; R = null; r.leave().catch(() => {}); }
+  mode = 'menu'; me = null; bots = []; race = null; remotes.clear(); isHost = false;
+  $('hud').classList.add('hidden'); $('startBtn').classList.add('hidden');
+  $('createBtn').disabled = $('joinBtn').disabled = !roomNs;
+  showPanel('menu');
+}
+
+// ---------- room helpers ----------
+function roster() {
+  if (!R) return [];
+  return R.peers().filter((p) => p.presence && typeof p.presence.n === 'string' && p.kind === 'viewer')
+    .slice().sort((a, b) => (+a.presence.jt || 0) - (+b.presence.jt || 0) || (a.peer < b.peer ? -1 : 1));
+}
+
+function hostStart() {
+  if (mode === 'solo') { newSoloRace(); return; }
+  if (!isHost) return;
+  race = { id: 'r' + Date.now().toString(36) + Math.floor(Math.random() * 1000), start: Date.now() + 4000, laps: LAPS };
+  sendPresence(true);
+}
+
+function sendPresence(force) {
+  if (!R || !me) return;
+  const t = Date.now();
+  if (!force && t - lastSend < SEND_MS) return;
+  lastSend = t;
+  const p = { n: nick, jt: joinTime, host: isHost, sl: mySlot,
+    x: Math.round(me.x), y: Math.round(me.y), a: Math.round(me.a * 100) / 100, sp: Math.round(me.speed),
+    dr: me.drifting ? 1 : 0, bo: me.boost > 0 ? 1 : 0,
+    rl: me.rl, s: Math.round(me.s), fin: me.fin >= 0 ? Math.round(me.fin) : -1, rid: myRaceId };
+  if (isHost) { p.hn = t; p.race = race; } else { p.hn = null; p.race = null; }
+  R.presence(p).catch(() => {});
+}
+
+function updateRoom() {
+  const list = roster();
+  const self = list.find((p) => p.isMe && p.sameTab);
+  mySlot = self ? Math.min(3, list.indexOf(self)) : 0;
+  if (self && !placed) { placed = true; C.resetKart(me, T, mySlot); }
+
+  // host election: earliest joiner among those claiming host, else earliest joiner
+  const host = list.find((p) => p.presence.host) || null;
+
+  if (isHost) { hostOffset = 0; }
+  else if (host) {
+    if (host.peer !== hostPeerId) { hostPeerId = host.peer; offsetMax = -Infinity; lastHostPres = null; }
+    if (host.presence !== lastHostPres && typeof host.presence.hn === 'number') {
+      lastHostPres = host.presence;
+      offsetMax = Math.max(offsetMax, host.presence.hn - host.updatedAt);
+      hostOffset = offsetMax;
+    }
+    const r = host.presence.race;
+    race = r && typeof r.id === 'string' && typeof r.start === 'number' ? r : race;
+  }
+
+  // a new race was announced
+  if (race && race.id !== seenRaceId) {
+    seenRaceId = race.id;
+    if (now() < race.start + 500 && mySlot < 4) {
+      myRaceId = race.id; C.resetKart(me, T, mySlot); showResults = false; resultsKey = ''; showPanel(null);
+    } else myRaceId = null;
+  }
+
+  // remote karts
+  const seen = new Set();
+  list.forEach((p, idx) => {
+    if (p.isMe && p.sameTab) return;
+    const q = p.presence; if (typeof q.x !== 'number') return;
+    seen.add(p.peer);
+    let r = remotes.get(p.peer);
+    if (!r) { r = { x: q.x, y: q.y, a: q.a, pres: null }; remotes.set(p.peer, r); }
+    if (r.pres !== q) { r.pres = q; r.recv = Date.now(); }
+    r.color = COLORS[Math.min(idx, 3)]; r.name = clean(q.n) || '?';
+  });
+  for (const k of remotes.keys()) if (!seen.has(k)) remotes.delete(k);
+  $('roomtag').textContent = '방 ' + roomCode + ' · ' + Math.min(list.length, 4) + '/4명 · 🔗초대';
+}
+
+// ---------- standings ----------
+function racers() {
+  const out = [];
+  if (!me) return out;
+  if (mode === 'solo') {
+    out.push({ name: nick, color: COLORS[0], prog: C.progress(me, T), fin: me.fin, me: true });
+    bots.forEach((b) => out.push({ name: b.name, color: b.color, prog: C.progress(b, T), fin: b.fin }));
+  } else if (race) {
+    if (myRaceId === race.id) out.push({ name: nick, color: COLORS[mySlot], prog: C.progress(me, T), fin: me.fin, me: true });
+    for (const r of remotes.values()) {
+      const q = r.pres; if (!q || q.rid !== race.id) continue;
+      out.push({ name: r.name, color: r.color, prog: ((+q.rl || 0) - 1) * T.L + (+q.s || 0), fin: typeof q.fin === 'number' ? q.fin : -1 });
+    }
+  }
+  out.sort((a, b) => (a.fin >= 0 && b.fin >= 0) ? a.fin - b.fin : (a.fin >= 0 ? -1 : b.fin >= 0 ? 1 : b.prog - a.prog));
+  return out;
+}
+
+// ---------- simulation ----------
+function inRace() { return race && myRaceId === race.id; }
+function canDrive(k) {
+  if (!race) return true;
+  if (k === me && !inRace()) return true;
+  return now() >= race.start && k.fin < 0;
+}
+
+function simulate(dt) {
+  if (!me) return;
+  const steps = Math.min(12, Math.ceil(dt / STEP)), h = dt / steps;
+  for (let s = 0; s < steps; s++) {
+    C.stepKart(me, input, h, canDrive(me), T);
+    for (const b of bots) C.stepKart(b, C.botInput(b, T, b.lane), h, canDrive(b), T);
+    for (const b of bots) C.collide(me, b, true);
+    for (let i = 0; i < bots.length; i++) for (let j = i + 1; j < bots.length; j++) C.collide(bots[i], bots[j], true);
+    for (const r of remotes.values()) C.collide(me, r, false);
+  }
+  if (race && now() >= race.start) {
+    const t = now() - race.start;
+    if (inRace() && me.fin < 0 && C.progress(me, T) >= race.laps * T.L) { me.fin = t; sendPresence(true); }
+    for (const b of bots) if (b.fin < 0 && C.progress(b, T) >= race.laps * T.L) b.fin = t;
+  }
+  // remote display smoothing with short extrapolation
+  const k = 1 - Math.exp(-14 * dt);
+  for (const r of remotes.values()) {
+    const q = r.pres; const age = Math.min(0.25, (Date.now() - r.recv) / 1000);
+    const tx = q.x + Math.cos(q.a) * q.sp * age, ty = q.y + Math.sin(q.a) * q.sp * age;
+    if (Math.hypot(tx - r.x, ty - r.y) > 300) { r.x = tx; r.y = ty; r.a = q.a; }
+    r.x += (tx - r.x) * k; r.y += (ty - r.y) * k; r.a += C.wrapA(q.a - r.a) * k;
+    r.drifting = !!q.dr; r.boost = q.bo ? 1 : 0;
+  }
+}
+
+// ---------- rendering ----------
+function resize() {
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  cv.width = Math.round(innerWidth * dpr); cv.height = Math.round(innerHeight * dpr);
+}
+addEventListener('resize', resize); resize();
+
+function drawKart(k, color, name) {
+  ctx.save(); ctx.translate(k.x, k.y); ctx.rotate(k.a);
+  if (k.boost > 0) { ctx.fillStyle = 'rgba(80,180,255,.8)'; ctx.beginPath(); ctx.moveTo(-17, -6); ctx.lineTo(-34 - Math.random() * 10, 0); ctx.lineTo(-17, 6); ctx.fill(); }
+  if (k.drifting) { ctx.fillStyle = (k.charge || 0) >= C.P.BIG ? '#ff7a1a' : (k.charge || 0) >= C.P.SMALL ? '#ffd23f' : '#ddd';
+    for (const y of [-11, 11]) { ctx.beginPath(); ctx.arc(-15 - Math.random() * 6, y, 3 + Math.random() * 2, 0, 7); ctx.fill(); } }
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(-15, -11, 34, 24);
+  ctx.fillStyle = '#1c1c1c';
+  for (const [x, y] of [[-10, -12], [-10, 8], [8, -11], [8, 7]]) ctx.fillRect(x, y, 8, 4);
+  ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-16, -9, 33, 18, 6) : ctx.rect(-16, -9, 33, 18); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(6, -6, 9, 12);
+  ctx.fillStyle = '#ffe0c2'; ctx.beginPath(); ctx.arc(-3, 0, 6.5, 0, 7); ctx.fill();
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(-4, 0, 6.5, Math.PI * 0.5, Math.PI * 1.5); ctx.fill();
+  ctx.restore();
+}
+
+function draw(dt) {
+  const W = cv.width, H = cv.height, dpr = W / innerWidth;
+  const scale = Math.min(innerWidth, innerHeight) / 540 * dpr;
+  let tx, ty, ta;
+  if (me) { tx = me.x; ty = me.y; ta = me.a; }
+  else { menuT += dt * 0.15; tx = (minX + maxX) / 2 + Math.cos(menuT) * 300; ty = (minY + maxY) / 2 + Math.sin(menuT) * 300; ta = menuT + Math.PI / 2; }
+  const kk = 1 - Math.exp(-5 * dt);
+  camA += C.wrapA(ta - camA) * kk; camX = tx; camY = ty;
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#4c9a45'; ctx.fillRect(0, 0, W, H);
+  ctx.setTransform(1, 0, 0, 1, W / 2, H * (me ? 0.66 : 0.5));
+  ctx.scale(scale, scale); ctx.rotate(-camA - Math.PI / 2); ctx.translate(-camX, -camY);
+
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = C.WALL * 2 + 16; ctx.stroke(trackPath);
+  ctx.strokeStyle = '#d9c38a'; ctx.lineWidth = C.WALL * 2; ctx.stroke(trackPath);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = C.HALF * 2 + 14; ctx.stroke(trackPath);
+  ctx.setLineDash([24, 24]); ctx.strokeStyle = '#e0352b'; ctx.stroke(trackPath); ctx.setLineDash([]);
+  ctx.strokeStyle = '#5b5d63'; ctx.lineWidth = C.HALF * 2; ctx.stroke(trackPath);
+  ctx.setLineDash([30, 40]); ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 3; ctx.stroke(trackPath); ctx.setLineDash([]);
+
+  // start line (checkered)
+  ctx.save(); ctx.translate(T.xs[0], T.ys[0]); ctx.rotate(Math.atan2(T.dy[0], T.dx[0]));
+  const cs = 10; for (let i = -C.HALF / cs; i < C.HALF / cs; i++) for (let j = 0; j < 2; j++) { ctx.fillStyle = (i + j) % 2 ? '#111' : '#fff'; ctx.fillRect(j * cs - cs, i * cs, cs, cs); }
+  ctx.restore();
+
+  const view = Math.hypot(W, H) / scale;
+  for (const t of trees) {
+    if (Math.abs(t.x - camX) > view || Math.abs(t.y - camY) > view) continue;
+    ctx.fillStyle = '#2e6b2a'; ctx.beginPath(); ctx.arc(t.x, t.y, t.r, 0, 7); ctx.fill();
+    ctx.fillStyle = '#3f8a38'; ctx.beginPath(); ctx.arc(t.x - t.r * .2, t.y - t.r * .2, t.r * .6, 0, 7); ctx.fill();
+  }
+
+  const labels = [];
+  for (const b of bots) { drawKart(b, b.color, b.name); labels.push([b, b.name, b.color]); }
+  for (const r of remotes.values()) { drawKart(r, r.color, r.name); labels.push([r, r.name, r.color]); }
+  if (me) drawKart(me, mode === 'room' ? COLORS[Math.max(0, mySlot)] : COLORS[0], nick);
+
+  // name tags in screen space
+  const m = ctx.getTransform();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.font = `800 ${13 * dpr}px system-ui,sans-serif`; ctx.textAlign = 'center';
+  for (const [k, name, color] of labels) {
+    const sx = m.a * k.x + m.c * k.y + m.e, sy = m.b * k.x + m.d * k.y + m.f;
+    if (sx < -50 || sy < -50 || sx > W + 50 || sy > H + 50) continue;
+    ctx.lineWidth = 3 * dpr; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(name, sx, sy - 24 * dpr);
+    ctx.fillStyle = '#fff'; ctx.fillText(name, sx, sy - 24 * dpr);
+  }
+}
+
+function drawMini() {
+  const S = mini.width, pad = 14, sc = Math.min((S - pad * 2) / (maxX - minX), (S - pad * 2) / (maxY - minY));
+  const ox = (S - (maxX - minX) * sc) / 2 - minX * sc, oy = (S - (maxY - minY) * sc) / 2 - minY * sc;
+  mctx.setTransform(1, 0, 0, 1, 0, 0); mctx.clearRect(0, 0, S, S);
+  mctx.setTransform(sc, 0, 0, sc, ox, oy);
+  mctx.lineJoin = 'round'; mctx.strokeStyle = 'rgba(255,255,255,.85)'; mctx.lineWidth = 9 / sc; mctx.stroke(trackPath);
+  const dot = (k, c, r) => { mctx.fillStyle = c; mctx.beginPath(); mctx.arc(k.x, k.y, r / sc, 0, 7); mctx.fill(); };
+  for (const b of bots) dot(b, b.color, 6);
+  for (const r of remotes.values()) dot(r, r.color, 6);
+  if (me) { dot(me, '#000', 9); dot(me, mode === 'room' ? COLORS[Math.max(0, mySlot)] : COLORS[0], 7); }
+}
+
+// ---------- HUD ----------
+function updateHud() {
+  if (!me) return;
+  const list = racers(), t = race ? now() - race.start : 0;
+  let info = '';
+  if (race && (inRace() || mode === 'solo')) {
+    const rank = list.findIndex((x) => x.me) + 1;
+    info = `<div class="big">${rank}위 <span style="font-size:15px">/ ${list.length}</span></div>LAP ${Math.min(race.laps, Math.max(1, me.rl))}/${race.laps}<br>${fmt(me.fin >= 0 ? me.fin : t)}`;
+  } else if (mode === 'room') {
+    info = race && !inRace() ? '관전 중<br><span style="font-weight:500">다음 레이스를 기다려요</span>' : '자유 주행<br><span style="font-weight:500">' + (isHost ? '모두 모이면 시작!' : '방장을 기다려요') + '</span>';
+  }
+  $('info').innerHTML = info;
+
+  let center = '', msg = '';
+  if (race && (inRace() || mode === 'solo')) {
+    if (t < 0) center = String(Math.ceil(-t / 1000));
+    else if (t < 900) center = 'GO!';
+    else if (me.fin >= 0) center = '';
+  }
+  if (me.boost > 0) msg = '부스터!';
+  $('center').textContent = center;
+  if (msg || !$('msg').textContent.startsWith('초대') && !$('msg').textContent.startsWith('http')) $('msg').textContent = msg;
+
+  $('kmh').textContent = Math.round(Math.abs(me.speed) * 0.35);
+  const ch = me.charge || 0;
+  $('gfill').style.width = Math.min(100, ch / C.P.BIG * 100) + '%';
+  $('gfill').style.background = ch >= C.P.BIG ? '#ff7a1a' : ch >= C.P.SMALL ? '#ffd23f' : '#aaa';
+
+  const canStart = mode === 'room' && isHost && (!race || now() > race.start);
+  $('startBtn').classList.toggle('hidden', !canStart);
+  $('startBtn').textContent = race ? '다시 시작' : '레이스 시작';
+
+  // results
+  if (race && inRace() && me.fin >= 0) {
+    const key = list.map((x) => x.name + x.fin).join('|');
+    if (key !== resultsKey) { resultsKey = key; renderResults(list); }
+    if (!showResults) { showResults = true; showPanel('results'); }
+  }
+}
+
+function renderResults(list) {
+  const myRank = list.findIndex((x) => x.me) + 1;
+  let html = `<h2>🏁 ${myRank}위로 완주!</h2><ul class="res">`;
+  list.forEach((x, i) => {
+    html += `<li><span>${i + 1}</span><span class="dot" style="background:${x.color}"></span><span>${esc(x.name)}${x.me ? ' (나)' : ''}</span><span class="t">${x.fin >= 0 ? fmt(x.fin) : '달리는 중...'}</span></li>`;
+  });
+  html += '</ul>';
+  if (mode === 'solo') html += '<button class="btn" id="againBtn">다시 하기</button>';
+  else if (isHost) html += '<button class="btn" id="againBtn">다시 시작</button>';
+  else html += '<div class="sub">방장이 다시 시작하면 자동으로 출발해요</div>';
+  html += '<button class="btn gray" id="viewBtn">트랙 보기</button><button class="btn gray" id="outBtn">나가기</button>';
+  $('results').innerHTML = html;
+  const again = $('againBtn'); if (again) again.onclick = () => hostStart();
+  $('viewBtn').onclick = () => showPanel(null);
+  $('outBtn').onclick = () => leave();
+}
+
+// ---------- main loop ----------
+let last = performance.now();
+function frame(ts) {
+  const dt = Math.min(0.05, (ts - last) / 1000); last = ts;
+  if (mode === 'room' && R) updateRoom();
+  simulate(dt);
+  if (mode === 'room') sendPresence(false);
+  draw(dt); drawMini(); updateHud();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body></html>
