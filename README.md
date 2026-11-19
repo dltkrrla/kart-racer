@@ -9,3 +9,6 @@
 - ? 상자 = 부스터 아이템, 슬립스트림, 뒤처질수록 약간 빨라지는 따라잡기 보정
 - 혼자 연습 모드: 컴퓨터 3대와 레이스
 - 연결: PeerJS(WebRTC) P2P, 방장 폰이 호스트
+
+## 3D 모델 출처
+- 차량·텐트 모델: [Kenney Starter Kit Racing](https://github.com/KenneyNL/Starter-Kit-Racing) (CC0) — www.kenney.nl

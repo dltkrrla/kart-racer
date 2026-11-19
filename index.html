@@ -85,7 +85,8 @@
   </div>
   <div class="card hidden" id="results"></div>
 </div>
-<script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 const CORE = (() => {
@@ -666,7 +667,66 @@ const R3D = (() => {
     for (const px of [-len / 2, 0, len / 2]) { const p = new THREE.Mesh(new THREE.BoxGeometry(3, 64, 3), concrete); p.position.set(px, 32, s * 72); g.add(p); }
   }
 
+  // ---------- Kenney 3D 모델 (CC0) ----------
+  const MODEL_FOR = { '#ff4d3d': 'red', '#8e5bd6': 'purple', '#ffc81e': 'yellow', '#26c35b': 'green' };
+  let models = null, deco = null;
+  function prepModel(root) {
+    root.traverse((o) => {
+      if (o.isMesh) {
+        o.castShadow = true; o.receiveShadow = true;
+        const m = o.material; if (m && m.map) { m.map.encoding = THREE.LinearEncoding; m.map.needsUpdate = true; }
+      }
+    });
+    return root;
+  }
+  function loadModels(base) {
+    if (!THREE.GLTFLoader) return Promise.resolve(false);
+    const loader = new THREE.GLTFLoader();
+    const get = (n) => new Promise((res) => loader.load(base + n + '.glb', (g) => res(prepModel(g.scene)), undefined, () => res(null)));
+    return Promise.all(['red', 'purple', 'yellow', 'green'].map((c) => get('vehicle-truck-' + c)).concat([get('decoration-tents'), get('decoration-forest')]))
+      .then((arr) => {
+        if (arr.slice(0, 4).some((x) => !x)) return false;
+        models = { red: arr[0], purple: arr[1], yellow: arr[2], green: arr[3] };
+        deco = { tents: arr[4], forest: arr[5] };
+        for (const [, v] of karts) scene.remove(v.g);
+        karts.clear();
+        placeDeco();
+        return true;
+      });
+  }
+  function placeDeco() {
+    if (!deco) return;
+    // 텐트(정비 구역) 몇 군데
+    if (deco.tents) {
+      let n = 0;
+      for (let i = 60; i < T.N && n < 6; i += 131) {
+        const side = n % 2 ? 1 : -1, [x, z] = P(i, side * (C.WALL + 95));
+        if (C.nearest(T, x, z, -1).dist < C.WALL + 70) continue;
+        const t = deco.tents.clone(true); t.scale.setScalar(13); t.position.set(x, 0, z); t.rotation.y = -ang(i) + (side > 0 ? Math.PI : 0); scene.add(t); n++;
+      }
+    }
+  }
+
+  function makeKartModel(color) {
+    const src = models && models[MODEL_FOR[color]];
+    if (!src) return null;
+    const g = new THREE.Group();
+    const body = new THREE.Group(); g.add(body);
+    const m = src.clone(true); m.scale.setScalar(12); m.rotation.y = Math.PI / 2; body.add(m);
+    const wheels = [], fronts = [];
+    m.traverse((o) => {
+      if (/^wheel/.test(o.name)) { o.rotation.order = 'YXZ'; wheels.push(o); if (/front/.test(o.name)) fronts.push(o); }
+    });
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0x66d0ff, transparent: true, opacity: 0.9 });
+    const flameG = new THREE.ConeGeometry(2.8, 16, 10); flameG.rotateZ(Math.PI / 2);
+    const flames = [4, -4].map((z) => { const f = new THREE.Mesh(flameG, flameMat); f.position.set(-25, 8, z); g.add(f); return f; });
+    scene.add(g);
+    return { g, body, wheels, fronts, flames, flameMat, model: true, prevA: null, prevSp: 0, spin: 0, roll: 0, pitch: 0, steer: 0, lastL: null, lastR: null, smokeT: 0 };
+  }
+
   function makeKart(color) {
+    const fromModel = makeKartModel(color);
+    if (fromModel) return fromModel;
     const g = new THREE.Group();
     const paint = new THREE.MeshLambertMaterial({ color });
     const dark = new THREE.MeshLambertMaterial({ color: 0x1b1b1d });
@@ -735,9 +795,15 @@ const R3D = (() => {
       v.pitch += (Math.max(-0.07, Math.min(0.07, acc / 4000)) - v.pitch) * kk;
       v.body.rotation.set(v.roll, 0, v.pitch);
       v.body.position.y = Math.sin(time * 45 + v.color.length) * 0.25 * Math.min(1, Math.abs(sp) / 300);
-      for (const f of v.fronts) f.rotation.y = -v.steer * 0.5;
-      v.spin -= sp * dt / 5;
-      for (const w of v.wheels) w.rotation.z = v.spin;
+      if (v.model) {
+        v.spin += sp * dt / 4;
+        for (const w of v.wheels) { w.rotation.x = v.spin; w.rotation.y = 0; }
+        for (const f of v.fronts) f.rotation.y = v.steer * 0.45;
+      } else {
+        for (const f of v.fronts) f.rotation.y = -v.steer * 0.5;
+        v.spin -= sp * dt / 5;
+        for (const w of v.wheels) w.rotation.z = v.spin;
+      }
       const boosting = (k.boost || 0) > 0;
       for (const f of v.flames) { f.visible = boosting; f.scale.set(0.7 + Math.random() * 0.7, 1, 1); }
       v.flameMat.color.setHex(Math.random() < 0.5 ? 0x66d0ff : 0xa8ecff);
@@ -808,13 +874,13 @@ const R3D = (() => {
     renderer.render(scene, camera);
   }
 
-  return { init, syncKarts, render, hit };
+  return { init, syncKarts, render, hit, loadModels };
 })();
 </script>
 <script>
 (() => {
 const C = CORE, T = C.buildTrack();
-const COLORS = ['#ff4d3d', '#2f7cf6', '#ffc81e', '#26c35b'];
+const COLORS = ['#ff4d3d', '#8e5bd6', '#ffc81e', '#26c35b'];
 const LAPS = 3, SEND_MS = 66, STEP = 1 / 120;
 const $ = (id) => document.getElementById(id);
 const ov = $('ov'), octx = ov.getContext('2d'), mini = $('mini'), mctx = mini.getContext('2d');
@@ -839,6 +905,7 @@ for (const f of [0.18, 0.42, 0.66, 0.88]) {
 }
 const boxActive = boxes.map(() => true);
 R3D.init(T, trees, boxes);
+R3D.loadModels('models/').catch(() => {});
 
 // ---------- state ----------
 let mode = 'menu', placed = false;            // menu | solo | room
