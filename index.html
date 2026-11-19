@@ -62,7 +62,7 @@
 <div id="hud" class="hidden">
   <div id="info"></div>
   <canvas id="mini" width="220" height="220"></canvas>
-  <div id="topbar"><div id="roomtag" class="hidden"></div><button id="exitBtn" class="tbtn gray">나가기</button></div>
+  <div id="topbar"><div id="roomtag" class="hidden"></div><button id="viewBtn2" class="tbtn gray">3D로</button><button id="exitBtn" class="tbtn gray">나가기</button></div>
   <button id="startBtn" class="tbtn hidden">레이스 시작</button>
   <div id="msg"></div>
   <div id="center"></div>
@@ -73,12 +73,13 @@
 <div id="panel">
   <div class="card" id="menu">
     <h1>🏁 카트 레이서</h1>
-    <div class="sub">3D · 최대 4명 · 3바퀴 · 드리프트 부스터<br>방 코드로 누구나 참가 (와이파이·데이터)</div>
+    <div class="sub">2D/3D · 최대 4명 · 3바퀴 · 드리프트 부스터<br>방 코드로 누구나 참가 (와이파이·데이터)</div>
     <input id="nick" maxlength="8" placeholder="닉네임">
     <button class="btn" id="createBtn" disabled>방 만들기</button>
     <div class="row"><input id="codeIn" inputmode="numeric" maxlength="4" placeholder="방 코드 4자리"><button class="btn blue" id="joinBtn" disabled>참가</button></div>
     <div style="height:9px"></div>
     <button class="btn green" id="soloBtn">혼자 연습 (컴퓨터 3대)</button>
+    <button class="btn gray" id="viewMenu">화면: 2D (눌러서 바꾸기)</button>
     <div id="status">멀티플레이 연결 확인 중...</div>
     <div class="help">조작: ◀ ▶ 핸들 · 가속은 자동 · <b>드리프트</b>를 누른 채 꺾다가 놓으면 부스터 (게이지 노랑=작은, 주황=큰 부스터) · <b>? 상자</b>를 먹으면 🚀부스터 아이템 · 앞 카트 바로 뒤에 붙으면 <b>슬립스트림</b> · 뒤처질수록 조금 더 빨라져요</div>
   </div>
@@ -577,6 +578,9 @@ let me = null, bots = [], race = null, myRaceId = null, seenRaceId = null;
 let roomNs = null, R = null, isHost = false, roomCode = '', joinTime = 0, mySlot = 0;
 let hostOffset = 0, offsetMax = -Infinity, hostPeerId = null, lastHostPres = null;
 const remotes = new Map();
+let camA = 0, camX = 0, camY = 0, menuT = 0;
+let view = '2d';
+try { view = localStorage.getItem('kart-view') === '3d' ? '3d' : '2d'; } catch (e) {}
 let lastSend = 0, showResults = false, resultsKey = '', flash = '', flashUntil = 0, clockT = 0;
 const input = { left: false, right: false, drift: false, brake: false, gas: true };
 function flashMsg(m, ms) { flash = m; flashUntil = Date.now() + (ms || 1200); }
@@ -868,8 +872,91 @@ function simulate(dt) {
 function resizeOv() { const dpr = Math.min(2, devicePixelRatio || 1); ov.width = Math.round(innerWidth * dpr); ov.height = Math.round(innerHeight * dpr); }
 addEventListener('resize', resizeOv); resizeOv();
 
+function setView(v) {
+  view = v; try { localStorage.setItem('kart-view', v); } catch (e) {}
+  const gl = document.getElementById('gl'); if (gl) gl.style.visibility = v === '3d' ? 'visible' : 'hidden';
+  $('viewBtn2').textContent = v === '3d' ? '2D로' : '3D로'; $('viewMenu').textContent = '화면: ' + (v === '3d' ? '3D' : '2D') + ' (눌러서 바꾸기)';
+}
+$('viewBtn2').onclick = () => setView(view === '3d' ? '2d' : '3d');
+$('viewMenu').onclick = () => setView(view === '3d' ? '2d' : '3d');
+setView(view);
+
+function drawKart(k, color, name) {
+  octx.save(); octx.translate(k.x, k.y); octx.rotate(k.a);
+  if (k.boost > 0) { octx.fillStyle = 'rgba(80,180,255,.8)'; octx.beginPath(); octx.moveTo(-17, -6); octx.lineTo(-34 - Math.random() * 10, 0); octx.lineTo(-17, 6); octx.fill(); }
+  if (k.drifting) { octx.fillStyle = (k.charge || 0) >= C.P.BIG ? '#ff7a1a' : (k.charge || 0) >= C.P.SMALL ? '#ffd23f' : '#ddd';
+    for (const y of [-11, 11]) { octx.beginPath(); octx.arc(-15 - Math.random() * 6, y, 3 + Math.random() * 2, 0, 7); octx.fill(); } }
+  octx.fillStyle = 'rgba(0,0,0,.25)'; octx.fillRect(-15, -11, 34, 24);
+  octx.fillStyle = '#1c1c1c';
+  for (const [x, y] of [[-10, -12], [-10, 8], [8, -11], [8, 7]]) octx.fillRect(x, y, 8, 4);
+  octx.fillStyle = color; octx.beginPath(); octx.roundRect ? octx.roundRect(-16, -9, 33, 18, 6) : octx.rect(-16, -9, 33, 18); octx.fill();
+  octx.fillStyle = 'rgba(255,255,255,.35)'; octx.fillRect(6, -6, 9, 12);
+  octx.fillStyle = '#ffe0c2'; octx.beginPath(); octx.arc(-3, 0, 6.5, 0, 7); octx.fill();
+  octx.fillStyle = color; octx.beginPath(); octx.arc(-4, 0, 6.5, Math.PI * 0.5, Math.PI * 1.5); octx.fill();
+  octx.restore();
+}
+
+function draw2D(dt) {
+  const W = ov.width, H = ov.height, dpr = W / innerWidth;
+  const scale = Math.min(innerWidth, innerHeight) / 540 * dpr;
+  let tx, ty, ta;
+  if (me) { tx = me.x; ty = me.y; ta = me.a; }
+  else { menuT += dt * 0.15; tx = (minX + maxX) / 2 + Math.cos(menuT) * 300; ty = (minY + maxY) / 2 + Math.sin(menuT) * 300; ta = menuT + Math.PI / 2; }
+  const kk = 1 - Math.exp(-5 * dt);
+  camA += C.wrapA(ta - camA) * kk; camX = tx; camY = ty;
+
+  octx.setTransform(1, 0, 0, 1, 0, 0);
+  octx.fillStyle = '#4c9a45'; octx.fillRect(0, 0, W, H);
+  octx.setTransform(1, 0, 0, 1, W / 2, H * (me ? 0.66 : 0.5));
+  octx.scale(scale, scale); octx.rotate(-camA - Math.PI / 2); octx.translate(-camX, -camY);
+
+  octx.lineJoin = 'round'; octx.lineCap = 'round';
+  octx.strokeStyle = '#2a2a2a'; octx.lineWidth = C.WALL * 2 + 16; octx.stroke(trackPath);
+  octx.strokeStyle = '#d9c38a'; octx.lineWidth = C.WALL * 2; octx.stroke(trackPath);
+  octx.strokeStyle = '#fff'; octx.lineWidth = C.HALF * 2 + 14; octx.stroke(trackPath);
+  octx.setLineDash([24, 24]); octx.strokeStyle = '#e0352b'; octx.stroke(trackPath); octx.setLineDash([]);
+  octx.strokeStyle = '#5b5d63'; octx.lineWidth = C.HALF * 2; octx.stroke(trackPath);
+  octx.setLineDash([30, 40]); octx.strokeStyle = 'rgba(255,255,255,.35)'; octx.lineWidth = 3; octx.stroke(trackPath); octx.setLineDash([]);
+
+  // start line (checkered)
+  octx.save(); octx.translate(T.xs[0], T.ys[0]); octx.rotate(Math.atan2(T.dy[0], T.dx[0]));
+  const cs = 10; for (let i = -C.HALF / cs; i < C.HALF / cs; i++) for (let j = 0; j < 2; j++) { octx.fillStyle = (i + j) % 2 ? '#111' : '#fff'; octx.fillRect(j * cs - cs, i * cs, cs, cs); }
+  octx.restore();
+
+  const view = Math.hypot(W, H) / scale;
+  for (const t of trees) {
+    if (Math.abs(t.x - camX) > view || Math.abs(t.y - camY) > view) continue;
+    octx.fillStyle = '#2e6b2a'; octx.beginPath(); octx.arc(t.x, t.y, t.r, 0, 7); octx.fill();
+    octx.fillStyle = '#3f8a38'; octx.beginPath(); octx.arc(t.x - t.r * .2, t.y - t.r * .2, t.r * .6, 0, 7); octx.fill();
+  }
+
+  boxes.forEach((b, i) => {
+    if (!boxActive[i]) return;
+    octx.save(); octx.translate(b.x, b.y); octx.rotate(clockT * 2 + i);
+    const gr = octx.createLinearGradient(-9, -9, 9, 9); gr.addColorStop(0, '#ff5ad1'); gr.addColorStop(0.5, '#ffd23f'); gr.addColorStop(1, '#3fd2ff');
+    octx.fillStyle = gr; octx.fillRect(-9, -9, 18, 18); octx.fillStyle = '#fff'; octx.font = 'bold 14px sans-serif'; octx.textAlign = 'center'; octx.textBaseline = 'middle'; octx.fillText('?', 0, 1);
+    octx.restore();
+  });
+  const labels = [];
+  for (const b of bots) { drawKart(b, b.color, b.name); labels.push([b, b.name, b.color]); }
+  for (const r of remotes.values()) { drawKart(r, r.color, r.name); labels.push([r, r.name, r.color]); }
+  if (me) drawKart(me, mode === 'room' ? COLORS[Math.max(0, mySlot)] : COLORS[0], nick);
+
+  // name tags in screen space
+  const m = octx.getTransform();
+  octx.setTransform(1, 0, 0, 1, 0, 0);
+  octx.font = `800 ${13 * dpr}px system-ui,sans-serif`; octx.textAlign = 'center';
+  for (const [k, name, color] of labels) {
+    const sx = m.a * k.x + m.c * k.y + m.e, sy = m.b * k.x + m.d * k.y + m.f;
+    if (sx < -50 || sy < -50 || sx > W + 50 || sy > H + 50) continue;
+    octx.lineWidth = 3 * dpr; octx.strokeStyle = 'rgba(0,0,0,.7)'; octx.strokeText(name, sx, sy - 24 * dpr);
+    octx.fillStyle = '#fff'; octx.fillText(name, sx, sy - 24 * dpr);
+  }
+}
+
 function draw(dt) {
   clockT += dt;
+  if (view === '2d') { draw2D(dt); return; }
   const list = [];
   for (const b of bots) list.push({ id: 'bot-' + b.name, k: b, color: b.color, name: b.name });
   for (const [id, r] of remotes) list.push({ id: 'r-' + id, k: r, color: r.color, name: r.name });
