@@ -6,8 +6,9 @@
 <title>카트 레이서 4P</title>
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{margin:0;height:100%;overflow:hidden;background:#3d7a3a;font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:#fff;user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none}
-  #c{position:fixed;inset:0;width:100%;height:100%;display:block}
+  html,body{margin:0;height:100%;overflow:hidden;background:#8fd0ff;font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:#fff;user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none}
+  #gl{position:fixed;inset:0;width:100%!important;height:100%!important;display:block}
+  #ov{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
   .hidden{display:none!important}
   #hud{position:fixed;inset:0;pointer-events:none}
   #info{position:absolute;left:10px;top:10px;background:rgba(0,0,0,.45);border-radius:12px;padding:8px 12px;font-weight:700;line-height:1.35;font-size:15px;min-width:120px}
@@ -20,14 +21,23 @@
   #startBtn{position:absolute;left:50%;top:64px;transform:translateX(-50%);font-size:18px;padding:12px 22px;pointer-events:auto;box-shadow:0 4px 0 #b8860b}
   #center{position:absolute;left:0;right:0;top:30%;text-align:center;font-size:84px;font-weight:900;color:#ffd23f;text-shadow:0 4px 0 #a2560a,0 0 20px rgba(0,0,0,.4)}
   #msg{position:absolute;left:0;right:0;top:20%;text-align:center;font-size:22px;font-weight:800;text-shadow:0 2px 4px #000}
-  #speed{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);text-align:center;font-weight:900;font-size:22px;text-shadow:0 2px 3px #000}
+  #speed{position:absolute;left:50%;bottom:112px;transform:translateX(-50%);text-align:center;font-weight:900;font-size:22px;text-shadow:0 2px 3px #000}
   #gauge{width:120px;height:10px;border-radius:5px;background:rgba(0,0,0,.5);margin:4px auto 0;overflow:hidden}
   #gfill{height:100%;width:0;background:#999}
-  .ctl{position:absolute;bottom:18px;width:84px;height:84px;border-radius:50%;background:rgba(255,255,255,.22);border:3px solid rgba(255,255,255,.55);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:30px;pointer-events:auto;touch-action:none}
-  .ctl.on{background:rgba(255,210,63,.55)}
-  #bl{left:14px}#br{left:110px}
-  #bd{right:14px;width:104px;height:104px;font-size:17px}
-  #bb{right:128px;bottom:22px;width:72px;height:72px;font-size:14px}
+  .ctl{position:absolute;border-radius:50%;background:rgba(255,255,255,.22);border:3px solid rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;font-weight:900;pointer-events:auto;touch-action:none;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+  .ctl.on{background:rgba(255,210,63,.6)}
+  #bl,#br{bottom:18px;width:84px;height:84px;font-size:30px}
+  #bl{left:10px}#br{left:102px}
+  #bd{right:12px;bottom:18px;width:100px;height:100px;font-size:17px}
+  #bi{right:27px;bottom:130px;width:70px;height:70px;font-size:13px;flex-direction:column;line-height:1.1}
+  #bi.empty{opacity:.35}
+  #bb{right:33px;bottom:212px;width:58px;height:58px;font-size:12px}
+  @media (orientation:landscape) and (max-height:520px){
+    #speed{bottom:14px}
+    #bi{right:124px;bottom:26px}
+    #bb{right:206px;bottom:32px}
+    #mini{width:96px;height:96px}
+  }
   #panel{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,30,15,.55);padding:16px}
   .card{background:#fff;color:#222;border-radius:20px;padding:20px;width:min(380px,100%);box-shadow:0 10px 30px rgba(0,0,0,.35);max-height:100%;overflow:auto}
   .card h1{margin:0 0 4px;font-size:28px;text-align:center}
@@ -48,7 +58,7 @@
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+<canvas id="ov"></canvas>
 <div id="hud" class="hidden">
   <div id="info"></div>
   <canvas id="mini" width="220" height="220"></canvas>
@@ -58,22 +68,23 @@
   <div id="center"></div>
   <div id="speed"><span id="kmh">0</span> km/h<div id="gauge"><div id="gfill"></div></div></div>
   <div class="ctl" id="bl">◀</div><div class="ctl" id="br">▶</div>
-  <div class="ctl" id="bb">브레이크</div><div class="ctl" id="bd">드리프트</div>
+  <div class="ctl" id="bb">브레이크</div><div class="ctl empty" id="bi">🚀<span id="icount">부스터 0</span></div><div class="ctl" id="bd">드리프트</div>
 </div>
 <div id="panel">
   <div class="card" id="menu">
     <h1>🏁 카트 레이서</h1>
-    <div class="sub">최대 4명 · 3바퀴 · 드리프트 부스터<br>방 코드로 누구나 참가 (와이파이·데이터)</div>
+    <div class="sub">3D · 최대 4명 · 3바퀴 · 드리프트 부스터<br>방 코드로 누구나 참가 (와이파이·데이터)</div>
     <input id="nick" maxlength="8" placeholder="닉네임">
     <button class="btn" id="createBtn" disabled>방 만들기</button>
     <div class="row"><input id="codeIn" inputmode="numeric" maxlength="4" placeholder="방 코드 4자리"><button class="btn blue" id="joinBtn" disabled>참가</button></div>
     <div style="height:9px"></div>
     <button class="btn green" id="soloBtn">혼자 연습 (컴퓨터 3대)</button>
     <div id="status">멀티플레이 연결 확인 중...</div>
-    <div class="help">조작: ◀ ▶ 핸들 · 가속은 자동 · <b>드리프트</b>를 누른 채 꺾다가 놓으면 부스터 (게이지 노랑=작은 부스터, 주황=큰 부스터)</div>
+    <div class="help">조작: ◀ ▶ 핸들 · 가속은 자동 · <b>드리프트</b>를 누른 채 꺾다가 놓으면 부스터 (게이지 노랑=작은, 주황=큰 부스터) · <b>? 상자</b>를 먹으면 🚀부스터 아이템 · 앞 카트 바로 뒤에 붙으면 <b>슬립스트림</b> · 뒤처질수록 조금 더 빨라져요</div>
   </div>
   <div class="card hidden" id="results"></div>
 </div>
+<script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script>
 const CORE = (() => {
@@ -318,12 +329,226 @@ const NET = (() => {
 })();
 </script>
 <script>
+// three.js 3D 화면. 물리는 2D(x,y) 그대로, 화면만 3D(x,z)로 그림
+const R3D = (() => {
+  const C = CORE;
+  let T, renderer, scene, camera, karts = new Map(), boxes = [], camA = 0, camPos = null, t0 = 0;
+  const v3 = new THREE.Vector3();
+
+  function canvasTex(w, h, draw, repeat) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+    const t = new THREE.CanvasTexture(c);
+    if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
+    t.anisotropy = 4;
+    return t;
+  }
+  function noise(base, vary, dots) {
+    return (g, w, h) => {
+      g.fillStyle = base; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < dots; i++) { const v = (Math.random() - 0.5) * vary; g.fillStyle = `rgba(${v > 0 ? 255 : 0},${v > 0 ? 255 : 0},${v > 0 ? 255 : 0},${Math.abs(v)})`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
+    };
+  }
+
+  // 트랙 좌표 → 리본 메쉬
+  function ribbon(inner, outer, y, colorFn, mat, uvScale) {
+    const pos = [], col = [], uv = [], N = T.N;
+    const P = (i, off) => { const j = i % N; return [T.xs[j] - T.dy[j] * off, T.ys[j] + T.dx[j] * off]; };
+    for (let i = 0; i < N; i++) {
+      const c = colorFn ? colorFn(i) : [1, 1, 1]; if (!c) continue;
+      const a = P(i, inner), b = P(i, outer), cN = P(i + 1, inner), d = P(i + 1, outer);
+      const u0 = T.cum[i] / (uvScale || 100), u1 = T.cum[i + 1] / (uvScale || 100);
+      pos.push(a[0], y, a[1], b[0], y, b[1], d[0], y, d[1], a[0], y, a[1], d[0], y, d[1], cN[0], y, cN[1]);
+      uv.push(u0, 0, u0, 1, u1, 1, u0, 0, u1, 1, u1, 0);
+      for (let k = 0; k < 6; k++) col.push(c[0], c[1], c[2]);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat); scene.add(m); return m;
+  }
+  function wall(off, height, colorFn) {
+    const pos = [], col = [], N = T.N;
+    for (let i = 0; i < N; i++) {
+      const j = (i + 1) % N;
+      const ax = T.xs[i] - T.dy[i] * off, az = T.ys[i] + T.dx[i] * off, bx = T.xs[j] - T.dy[j] * off, bz = T.ys[j] + T.dx[j] * off;
+      pos.push(ax, 0, az, bx, 0, bz, bx, height, bz, ax, 0, az, bx, height, bz, ax, height, az);
+      const c = colorFn(i); for (let k = 0; k < 6; k++) col.push(c[0], c[1], c[2]);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    scene.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+  }
+
+  function init(track, treeList, boxList) {
+    T = track;
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.domElement.id = 'gl';
+    document.body.insertBefore(renderer.domElement, document.body.firstChild);
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x8fd0ff);
+    scene.fog = new THREE.Fog(0xbfe4ff, 700, 3200);
+    camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 2, 6000);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8470, 0.85));
+    const sun = new THREE.DirectionalLight(0xfff4e0, 0.75); sun.position.set(400, 800, 250); scene.add(sun);
+
+    // 땅
+    const grassTex = canvasTex(256, 256, noise('#4f9a3f', 0.35, 4000), [70, 70]);
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), new THREE.MeshLambertMaterial({ map: grassTex }));
+    ground.rotation.x = -Math.PI / 2; ground.position.set(500, -0.5, 600); scene.add(ground);
+
+    // 도로, 연석, 모래, 중앙선
+    const asphalt = canvasTex(256, 256, noise('#56585e', 0.28, 6000), null);
+    asphalt.wrapS = asphalt.wrapT = THREE.RepeatWrapping;
+    const H = C.HALF, Wl = C.WALL;
+    ribbon(-H - 10, -Wl, 0.2, () => [0.86, 0.78, 0.55], new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    ribbon(H + 10, Wl, 0.2, () => [0.86, 0.78, 0.55], new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    ribbon(-H, H, 0.6, null, new THREE.MeshLambertMaterial({ map: asphalt, side: THREE.DoubleSide }), 140);
+    const curb = (i) => Math.floor(i / 3) % 2 ? [0.9, 0.15, 0.12] : [1, 1, 1];
+    ribbon(-H - 10, -H, 0.9, curb, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    ribbon(H, H + 10, 0.9, curb, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    ribbon(-1.5, 1.5, 0.8, (i) => (i % 8 < 4 ? [0.95, 0.95, 0.95] : null), new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    const tire = (i) => Math.floor(i / 2) % 2 ? [0.85, 0.12, 0.1] : [0.95, 0.95, 0.95];
+    wall(Wl, 9, tire); wall(-Wl, 9, tire);
+
+    // 출발선 + 아치
+    const a0 = Math.atan2(T.dy[0], T.dx[0]);
+    const checker = canvasTex(64, 256, (g, w, h) => { const s = 16; for (let x = 0; x < w / s; x++) for (let y = 0; y < h / s; y++) { g.fillStyle = (x + y) % 2 ? '#111' : '#fff'; g.fillRect(x * s, y * s, s, s); } });
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(16, H * 2), new THREE.MeshLambertMaterial({ map: checker }));
+    line.rotation.x = -Math.PI / 2; line.rotation.z = -a0; line.position.set(T.xs[0], 1.0, T.ys[0]); scene.add(line);
+    const arch = new THREE.Group(); arch.position.set(T.xs[0], 0, T.ys[0]); arch.rotation.y = -a0; scene.add(arch);
+    const red = new THREE.MeshLambertMaterial({ color: 0xe0352b });
+    for (const z of [-(Wl + 6), Wl + 6]) { const p = new THREE.Mesh(new THREE.BoxGeometry(8, 70, 8), red); p.position.set(0, 35, z); arch.add(p); }
+    const bannerTex = canvasTex(1024, 128, (g, w, h) => { g.fillStyle = '#e0352b'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.font = 'bold 84px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('🏁 KART RACER 🏁', w / 2, h / 2 + 4); });
+    const banner = new THREE.Mesh(new THREE.BoxGeometry(6, 22, (Wl + 10) * 2), [red, red, red, red, new THREE.MeshLambertMaterial({ map: bannerTex }), new THREE.MeshLambertMaterial({ map: bannerTex })]);
+    banner.position.set(0, 72, 0); banner.rotation.y = Math.PI / 2; banner.rotation.y = 0;
+    // 배너 글씨가 진행 방향(앞/뒤)에서 보이도록: x축 면에 텍스처
+    banner.material = [new THREE.MeshLambertMaterial({ map: bannerTex }), new THREE.MeshLambertMaterial({ map: bannerTex }), red, red, red, red];
+    bannerTex.center.set(0.5, 0.5);
+    arch.add(banner);
+
+    // 나무 (인스턴싱)
+    const crownG = new THREE.ConeGeometry(1, 2.4, 7), trunkG = new THREE.CylinderGeometry(0.18, 0.22, 0.8, 6);
+    const crowns = new THREE.InstancedMesh(crownG, new THREE.MeshLambertMaterial({ color: 0x2f7a30 }), treeList.length);
+    const trunks = new THREE.InstancedMesh(trunkG, new THREE.MeshLambertMaterial({ color: 0x7a5230 }), treeList.length);
+    const d = new THREE.Object3D();
+    treeList.forEach((t, i) => {
+      d.position.set(t.x, t.r * 0.8 + t.r * 1.2, t.y); d.scale.set(t.r, t.r, t.r); d.rotation.set(0, i, 0); d.updateMatrix(); crowns.setMatrixAt(i, d.matrix);
+      d.position.set(t.x, t.r * 0.4, t.y); d.updateMatrix(); trunks.setMatrixAt(i, d.matrix);
+    });
+    scene.add(crowns, trunks);
+
+    // 먼 산
+    const mtnMat = new THREE.MeshLambertMaterial({ color: 0x6f9a78, flatShading: true });
+    for (let i = 0; i < 18; i++) {
+      const ang = i / 18 * Math.PI * 2, r = 3200 + (i % 3) * 300, hgt = 500 + ((i * 37) % 5) * 120;
+      const m = new THREE.Mesh(new THREE.ConeGeometry(hgt * 1.3, hgt, 6), mtnMat);
+      m.position.set(500 + Math.cos(ang) * r, hgt / 2 - 20, 600 + Math.sin(ang) * r); scene.add(m);
+    }
+
+    // 아이템 상자
+    const qTex = canvasTex(64, 64, (g, w, h) => { const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#ff5ad1'); gr.addColorStop(0.5, '#ffd23f'); gr.addColorStop(1, '#3fd2ff'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.font = 'bold 48px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('?', w / 2, h / 2 + 2); });
+    const boxMat = new THREE.MeshLambertMaterial({ map: qTex, transparent: true, opacity: 0.9, emissive: 0x333333 });
+    const boxG = new THREE.BoxGeometry(14, 14, 14);
+    boxes = boxList.map((b) => { const m = new THREE.Mesh(boxG, boxMat); m.position.set(b.x, 14, b.y); scene.add(m); return m; });
+
+    addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+  }
+
+  function makeKart(color) {
+    const g = new THREE.Group();
+    const paint = new THREE.MeshLambertMaterial({ color });
+    const dark = new THREE.MeshLambertMaterial({ color: 0x1c1c1c });
+    const body = new THREE.Group(); g.add(body);
+    const add = (geo, mat, x, y, z, parent) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); (parent || body).add(m); return m; };
+    add(new THREE.BoxGeometry(30, 6, 18), paint, 0, 7, 0);
+    add(new THREE.BoxGeometry(12, 4, 14), paint, 18, 6, 0);
+    add(new THREE.BoxGeometry(4, 2, 22), dark, 23, 4, 0);
+    add(new THREE.BoxGeometry(3, 8, 3), dark, -14, 12, 0);
+    add(new THREE.BoxGeometry(5, 2, 22), paint, -15, 16, 0);
+    add(new THREE.BoxGeometry(8, 8, 12), dark, -6, 12, 0);
+    add(new THREE.SphereGeometry(5, 12, 10), new THREE.MeshLambertMaterial({ color: 0xffd9b8 }), -3, 20, 0);
+    const helmet = add(new THREE.SphereGeometry(5.6, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2), paint, -3, 21, 0);
+    helmet.rotation.z = 0.5;
+    add(new THREE.BoxGeometry(2, 2, 10), dark, 6, 13, 0);
+    const wheelG = new THREE.CylinderGeometry(5, 5, 5, 12); wheelG.rotateX(Math.PI / 2);
+    for (const [x, z] of [[11, 10.5], [11, -10.5], [-11, 11.5], [-11, -11.5]]) add(wheelG, dark, x, 5, z, g);
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(20, 16), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: 0.28, depthWrite: false }));
+    shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.95; shadow.scale.set(1.2, 0.8, 1); g.add(shadow);
+    const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffd23f });
+    const sparks = [-11.5, 11.5].map((z) => add(new THREE.SphereGeometry(2.5, 6, 5), sparkMat, -16, 3, z, g));
+    const flameG = new THREE.ConeGeometry(4, 22, 10); flameG.rotateZ(Math.PI / 2);
+    const flame = add(flameG, new THREE.MeshBasicMaterial({ color: 0x66d0ff, transparent: true, opacity: 0.85 }), -26, 9, 0, g);
+    scene.add(g);
+    return { g, body, sparks, sparkMat, flame };
+  }
+
+  function syncKarts(list, time) {
+    const seen = new Set();
+    for (const it of list) {
+      seen.add(it.id);
+      let v = karts.get(it.id);
+      if (!v || v.color !== it.color) { if (v) scene.remove(v.g); v = makeKart(it.color); v.color = it.color; karts.set(it.id, v); }
+      const k = it.k;
+      v.g.position.set(k.x, 0, k.y);
+      v.g.rotation.y = -k.a;
+      const sp = Math.min(1, Math.abs(k.speed || 0) / 400);
+      v.body.position.y = Math.sin(time * 40 + it.id.length) * 0.35 * sp;
+      v.body.rotation.x = k.drifting ? 0.06 * (k.steer || 1) : 0;
+      const ch = k.charge || 0;
+      v.sparkMat.color.setHex(ch >= C.P.BIG ? 0xff7a1a : ch >= C.P.SMALL ? 0xffd23f : 0xdddddd);
+      for (const s of v.sparks) { s.visible = !!k.drifting; s.scale.setScalar(0.6 + Math.random() * 0.8); }
+      v.flame.visible = (k.boost || 0) > 0;
+      v.flame.scale.set(0.8 + Math.random() * 0.5, 1, 1);
+      it.screen = project(k.x, 34, k.y);
+    }
+    for (const [id, v] of karts) if (!seen.has(id)) { scene.remove(v.g); karts.delete(id); }
+  }
+
+  function project(x, y, z) {
+    v3.set(x, y, z).project(camera);
+    if (v3.z > 1) return null;
+    return { x: (v3.x + 1) / 2 * innerWidth, y: (1 - v3.y) / 2 * innerHeight };
+  }
+
+  function render(dt, focus, boxActive, time) {
+    if (focus) {
+      camA += C.wrapA(focus.a - camA) * (1 - Math.exp(-7 * dt));
+      const fx = Math.cos(camA), fz = Math.sin(camA);
+      const portrait = innerHeight > innerWidth;
+      const dist = portrait ? 100 : 82, hgt = portrait ? 46 : 36;
+      const want = new THREE.Vector3(focus.x - fx * dist, hgt, focus.y - fz * dist);
+      if (!camPos || camPos.distanceTo(want) > 400) camPos = want.clone();
+      camPos.lerp(want, 1 - Math.exp(-10 * dt));
+      camera.position.copy(camPos);
+      camera.lookAt(focus.x + fx * 60, 6, focus.y + fz * 60);
+      const fov = (portrait ? 74 : 60) + Math.max(0, Math.min(1, (Math.abs(focus.speed) - 300) / 340)) * 16;
+      camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt)); camera.updateProjectionMatrix();
+    } else {
+      t0 += dt * 0.12;
+      camera.position.set(500 + Math.cos(t0) * 1300, 520, 650 + Math.sin(t0) * 1300);
+      camera.lookAt(500, 0, 650); camPos = null;
+      if (camera.fov !== 62) { camera.fov = 62; camera.updateProjectionMatrix(); }
+    }
+    boxes.forEach((m, i) => { m.visible = boxActive[i]; m.rotation.y = time * 1.5 + i; m.rotation.x = time * 0.7; m.position.y = 14 + Math.sin(time * 3 + i) * 2; });
+    renderer.render(scene, camera);
+  }
+
+  return { init, syncKarts, render };
+})();
+</script>
+<script>
 (() => {
 const C = CORE, T = C.buildTrack();
 const COLORS = ['#ff4d3d', '#2f7cf6', '#ffc81e', '#26c35b'];
 const LAPS = 3, SEND_MS = 66, STEP = 1 / 120;
 const $ = (id) => document.getElementById(id);
-const cv = $('c'), ctx = cv.getContext('2d'), mini = $('mini'), mctx = mini.getContext('2d');
+const ov = $('ov'), octx = ov.getContext('2d'), mini = $('mini'), mctx = mini.getContext('2d');
 
 // ---------- track drawing ----------
 const trackPath = new Path2D();
@@ -333,10 +558,18 @@ let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
 for (let i = 0; i < T.N; i++) { minX = Math.min(minX, T.xs[i]); maxX = Math.max(maxX, T.xs[i]); minY = Math.min(minY, T.ys[i]); maxY = Math.max(maxY, T.ys[i]); }
 const trees = [];
 { let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  for (let n = 0; n < 900 && trees.length < 140; n++) {
-    const x = minX - 400 + rnd() * (maxX - minX + 800), y = minY - 400 + rnd() * (maxY - minY + 800);
-    if (C.nearest(T, x, y, -1).dist > C.WALL + 50) trees.push({ x, y, r: 22 + rnd() * 22 });
+  for (let n = 0; n < 3000 && trees.length < 320; n++) {
+    const x = minX - 700 + rnd() * (maxX - minX + 1400), y = minY - 700 + rnd() * (maxY - minY + 1400);
+    if (C.nearest(T, x, y, -1).dist > C.WALL + 45) trees.push({ x, y, r: 12 + rnd() * 14 });
   } }
+// 아이템 상자: 트랙 4곳 x 3줄
+const boxes = [];
+for (const f of [0.18, 0.42, 0.66, 0.88]) {
+  const i = Math.floor(T.N * f);
+  for (const off of [-42, 0, 42]) boxes.push({ x: T.xs[i] - T.dy[i] * off, y: T.ys[i] + T.dx[i] * off, back: 0 });
+}
+const boxActive = boxes.map(() => true);
+R3D.init(T, trees, boxes);
 
 // ---------- state ----------
 let mode = 'menu', placed = false;            // menu | solo | room
@@ -344,8 +577,9 @@ let me = null, bots = [], race = null, myRaceId = null, seenRaceId = null;
 let roomNs = null, R = null, isHost = false, roomCode = '', joinTime = 0, mySlot = 0;
 let hostOffset = 0, offsetMax = -Infinity, hostPeerId = null, lastHostPres = null;
 const remotes = new Map();
-let lastSend = 0, camA = 0, camX = 0, camY = 0, menuT = 0, showResults = false, resultsKey = '';
+let lastSend = 0, showResults = false, resultsKey = '', flash = '', flashUntil = 0, clockT = 0;
 const input = { left: false, right: false, drift: false, brake: false, gas: true };
+function flashMsg(m, ms) { flash = m; flashUntil = Date.now() + (ms || 1200); }
 let nick = '';
 try { nick = localStorage.getItem('kart-nick') || ''; } catch (e) {}
 $('nick').value = nick;
@@ -372,8 +606,10 @@ function bindBtn(id, key) {
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => el.addEventListener(ev, () => set(false)));
 }
 bindBtn('bl', 'left'); bindBtn('br', 'right'); bindBtn('bd', 'drift'); bindBtn('bb', 'brake');
+function useItem() { if (!me || !(me.items > 0) || !canDrive(me)) return; me.items--; me.boost = Math.max(me.boost, 1.3); flashMsg('🚀 부스터!'); }
+$('bi').addEventListener('pointerdown', (e) => { e.preventDefault(); useItem(); });
 const keys = {};
-addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT') return; keys[e.code] = true; syncKeys(); });
+addEventListener('keydown', (e) => { if (e.target.tagName === 'INPUT') return; if ((e.code === 'KeyE' || e.code === 'ArrowUp') && !e.repeat) useItem(); keys[e.code] = true; syncKeys(); });
 addEventListener('keyup', (e) => { keys[e.code] = false; syncKeys(); });
 let kbUsed = false;
 function syncKeys() {
@@ -404,13 +640,14 @@ function showPanel(which) {
 function startSolo() {
   getNick(); mode = 'solo';
   me = C.newKart(T, 0);
-  bots = [1, 2, 3].map((s, i) => { const k = C.newKart(T, s); k.maxMul = [0.97, 0.93, 0.89][i]; k.lane = [22, -18, 8][i]; k.name = ['토끼봇', '거북봇', '여우봇'][i]; k.color = COLORS[s]; return k; });
+  bots = [1, 2, 3].map((s, i) => { const k = C.newKart(T, s); k.baseMul = [0.97, 0.94, 0.91][i]; k.lane = [22, -18, 8][i]; k.name = ['토끼봇', '거북봇', '여우봇'][i]; k.color = COLORS[s]; return k; });
   newSoloRace();
   enterGameUI();
 }
 function newSoloRace() {
   race = { id: 's' + Date.now(), start: Date.now() + 3500, laps: LAPS };
   C.resetKart(me, T, 0); bots.forEach((b, i) => C.resetKart(b, T, i + 1));
+  me.items = 0; boxes.forEach((b, i) => { boxActive[i] = true; b.back = 0; });
   myRaceId = race.id; showResults = false; resultsKey = ''; showPanel(null);
 }
 
@@ -512,7 +749,7 @@ function updateRoom() {
   if (race && race.id !== seenRaceId) {
     seenRaceId = race.id;
     if (now() < race.start + 500 && mySlot < 4) {
-      myRaceId = race.id; C.resetKart(me, T, mySlot); showResults = false; resultsKey = ''; showPanel(null);
+      myRaceId = race.id; C.resetKart(me, T, mySlot); me.items = 0; showResults = false; resultsKey = ''; showPanel(null);
     } else myRaceId = null;
   }
 
@@ -557,8 +794,52 @@ function canDrive(k) {
   return now() >= race.start && k.fin < 0;
 }
 
+function catchUp(dt) {
+  const racing = race && now() >= race.start;
+  const all = [];
+  if (me) all.push(me);
+  for (const b of bots) all.push(b);
+  const remoteKs = [...remotes.values()];
+  // 뒤처질수록 최고속도 보정 (최대 +14%)
+  let lead = -Infinity;
+  if (racing) {
+    for (const x of racers()) if (x.fin < 0) lead = Math.max(lead, x.prog);
+  }
+  for (const k of all) {
+    const base = k.baseMul || 1;
+    const inIt = k === me ? inRace() : true;
+    if (racing && inIt && k.fin < 0 && lead > -Infinity) {
+      const gap = Math.max(0, lead - C.progress(k, T));
+      k.maxMul = base * (1 + Math.min(1, gap / 1600) * 0.14);
+    } else k.maxMul = base;
+    // 슬립스트림: 앞 카트 바로 뒤를 1초 따라가면 부스터
+    let behind = false;
+    if (k.speed > 250) {
+      const fx = Math.cos(k.a), fy = Math.sin(k.a);
+      for (const o of all.concat(remoteKs)) {
+        if (o === k) continue;
+        const dx = o.x - k.x, dy = o.y - k.y, d = Math.hypot(dx, dy);
+        if (d > 28 && d < 170 && (dx * fx + dy * fy) / d > 0.96) { behind = true; break; }
+      }
+    }
+    k.draft = behind ? (k.draft || 0) + dt : Math.max(0, (k.draft || 0) - dt * 2);
+    if (k.draft >= 1.0) { k.draft = 0; k.boost = Math.max(k.boost, 0.9); if (k === me) flashMsg('💨 슬립스트림!'); }
+  }
+  // 아이템 상자
+  const t = Date.now();
+  boxes.forEach((b, i) => {
+    if (!boxActive[i]) { if (t > b.back) boxActive[i] = true; return; }
+    if (me && Math.hypot(me.x - b.x, me.y - b.y) < 24) {
+      boxActive[i] = false; b.back = t + 3000;
+      if ((me.items || 0) < 2) { me.items = (me.items || 0) + 1; flashMsg('🚀 부스터 획득!'); }
+    }
+    for (const bt of bots) if (boxActive[i] && Math.hypot(bt.x - b.x, bt.y - b.y) < 24) { boxActive[i] = false; b.back = t + 3000; bt.boost = Math.max(bt.boost, 1.0); }
+  });
+}
+
 function simulate(dt) {
   if (!me) return;
+  catchUp(dt);
   const steps = Math.min(12, Math.ceil(dt / STEP)), h = dt / steps;
   for (let s = 0; s < steps; s++) {
     C.stepKart(me, input, h, canDrive(me), T);
@@ -584,75 +865,25 @@ function simulate(dt) {
 }
 
 // ---------- rendering ----------
-function resize() {
-  const dpr = Math.min(2, devicePixelRatio || 1);
-  cv.width = Math.round(innerWidth * dpr); cv.height = Math.round(innerHeight * dpr);
-}
-addEventListener('resize', resize); resize();
-
-function drawKart(k, color, name) {
-  ctx.save(); ctx.translate(k.x, k.y); ctx.rotate(k.a);
-  if (k.boost > 0) { ctx.fillStyle = 'rgba(80,180,255,.8)'; ctx.beginPath(); ctx.moveTo(-17, -6); ctx.lineTo(-34 - Math.random() * 10, 0); ctx.lineTo(-17, 6); ctx.fill(); }
-  if (k.drifting) { ctx.fillStyle = (k.charge || 0) >= C.P.BIG ? '#ff7a1a' : (k.charge || 0) >= C.P.SMALL ? '#ffd23f' : '#ddd';
-    for (const y of [-11, 11]) { ctx.beginPath(); ctx.arc(-15 - Math.random() * 6, y, 3 + Math.random() * 2, 0, 7); ctx.fill(); } }
-  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(-15, -11, 34, 24);
-  ctx.fillStyle = '#1c1c1c';
-  for (const [x, y] of [[-10, -12], [-10, 8], [8, -11], [8, 7]]) ctx.fillRect(x, y, 8, 4);
-  ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-16, -9, 33, 18, 6) : ctx.rect(-16, -9, 33, 18); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(6, -6, 9, 12);
-  ctx.fillStyle = '#ffe0c2'; ctx.beginPath(); ctx.arc(-3, 0, 6.5, 0, 7); ctx.fill();
-  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(-4, 0, 6.5, Math.PI * 0.5, Math.PI * 1.5); ctx.fill();
-  ctx.restore();
-}
+function resizeOv() { const dpr = Math.min(2, devicePixelRatio || 1); ov.width = Math.round(innerWidth * dpr); ov.height = Math.round(innerHeight * dpr); }
+addEventListener('resize', resizeOv); resizeOv();
 
 function draw(dt) {
-  const W = cv.width, H = cv.height, dpr = W / innerWidth;
-  const scale = Math.min(innerWidth, innerHeight) / 540 * dpr;
-  let tx, ty, ta;
-  if (me) { tx = me.x; ty = me.y; ta = me.a; }
-  else { menuT += dt * 0.15; tx = (minX + maxX) / 2 + Math.cos(menuT) * 300; ty = (minY + maxY) / 2 + Math.sin(menuT) * 300; ta = menuT + Math.PI / 2; }
-  const kk = 1 - Math.exp(-5 * dt);
-  camA += C.wrapA(ta - camA) * kk; camX = tx; camY = ty;
-
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = '#4c9a45'; ctx.fillRect(0, 0, W, H);
-  ctx.setTransform(1, 0, 0, 1, W / 2, H * (me ? 0.66 : 0.5));
-  ctx.scale(scale, scale); ctx.rotate(-camA - Math.PI / 2); ctx.translate(-camX, -camY);
-
-  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = C.WALL * 2 + 16; ctx.stroke(trackPath);
-  ctx.strokeStyle = '#d9c38a'; ctx.lineWidth = C.WALL * 2; ctx.stroke(trackPath);
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = C.HALF * 2 + 14; ctx.stroke(trackPath);
-  ctx.setLineDash([24, 24]); ctx.strokeStyle = '#e0352b'; ctx.stroke(trackPath); ctx.setLineDash([]);
-  ctx.strokeStyle = '#5b5d63'; ctx.lineWidth = C.HALF * 2; ctx.stroke(trackPath);
-  ctx.setLineDash([30, 40]); ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 3; ctx.stroke(trackPath); ctx.setLineDash([]);
-
-  // start line (checkered)
-  ctx.save(); ctx.translate(T.xs[0], T.ys[0]); ctx.rotate(Math.atan2(T.dy[0], T.dx[0]));
-  const cs = 10; for (let i = -C.HALF / cs; i < C.HALF / cs; i++) for (let j = 0; j < 2; j++) { ctx.fillStyle = (i + j) % 2 ? '#111' : '#fff'; ctx.fillRect(j * cs - cs, i * cs, cs, cs); }
-  ctx.restore();
-
-  const view = Math.hypot(W, H) / scale;
-  for (const t of trees) {
-    if (Math.abs(t.x - camX) > view || Math.abs(t.y - camY) > view) continue;
-    ctx.fillStyle = '#2e6b2a'; ctx.beginPath(); ctx.arc(t.x, t.y, t.r, 0, 7); ctx.fill();
-    ctx.fillStyle = '#3f8a38'; ctx.beginPath(); ctx.arc(t.x - t.r * .2, t.y - t.r * .2, t.r * .6, 0, 7); ctx.fill();
-  }
-
-  const labels = [];
-  for (const b of bots) { drawKart(b, b.color, b.name); labels.push([b, b.name, b.color]); }
-  for (const r of remotes.values()) { drawKart(r, r.color, r.name); labels.push([r, r.name, r.color]); }
-  if (me) drawKart(me, mode === 'room' ? COLORS[Math.max(0, mySlot)] : COLORS[0], nick);
-
-  // name tags in screen space
-  const m = ctx.getTransform();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.font = `800 ${13 * dpr}px system-ui,sans-serif`; ctx.textAlign = 'center';
-  for (const [k, name, color] of labels) {
-    const sx = m.a * k.x + m.c * k.y + m.e, sy = m.b * k.x + m.d * k.y + m.f;
-    if (sx < -50 || sy < -50 || sx > W + 50 || sy > H + 50) continue;
-    ctx.lineWidth = 3 * dpr; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(name, sx, sy - 24 * dpr);
-    ctx.fillStyle = '#fff'; ctx.fillText(name, sx, sy - 24 * dpr);
+  clockT += dt;
+  const list = [];
+  for (const b of bots) list.push({ id: 'bot-' + b.name, k: b, color: b.color, name: b.name });
+  for (const [id, r] of remotes) list.push({ id: 'r-' + id, k: r, color: r.color, name: r.name });
+  if (me) { me.steer = (input.right ? 1 : 0) - (input.left ? 1 : 0); list.push({ id: 'me', k: me, color: mode === 'room' ? COLORS[Math.max(0, mySlot)] : COLORS[0], name: nick, me: true }); }
+  R3D.syncKarts(list, clockT);
+  R3D.render(dt, me, boxActive, clockT);
+  // 이름표
+  const dpr = ov.width / innerWidth;
+  octx.setTransform(dpr, 0, 0, dpr, 0, 0); octx.clearRect(0, 0, innerWidth, innerHeight);
+  octx.font = '800 13px system-ui,sans-serif'; octx.textAlign = 'center';
+  for (const it of list) {
+    if (it.me || !it.screen) continue;
+    octx.lineWidth = 3; octx.strokeStyle = 'rgba(0,0,0,.7)'; octx.strokeText(it.name, it.screen.x, it.screen.y);
+    octx.fillStyle = '#fff'; octx.fillText(it.name, it.screen.x, it.screen.y);
   }
 }
 
@@ -687,7 +918,8 @@ function updateHud() {
     else if (t < 900) center = 'GO!';
     else if (me.fin >= 0) center = '';
   }
-  if (me.boost > 0) msg = '부스터!';
+  if (Date.now() < flashUntil) msg = flash; else if (me.boost > 0) msg = '부스터!';
+  const ic = me.items || 0; $('icount').textContent = '부스터 ' + ic; $('bi').classList.toggle('empty', ic === 0);
   $('center').textContent = center;
   if (msg || !$('msg').textContent.startsWith('초대') && !$('msg').textContent.startsWith('http')) $('msg').textContent = msg;
 
